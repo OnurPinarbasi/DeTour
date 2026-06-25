@@ -1,0 +1,198 @@
+/* Styling for the main application container */
+.map-wrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Sidebar container - Glassmorphism, transparent modern light theme */
+.sidebar {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  width: 360px;
+  max-width: calc(100% - 48px);
+  max-height: calc(100vh - 48px);
+  background: rgba(255, 255, 255, 0.20); /* Highly transparent frosted glass */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.12);
+  z-index: 1000; /* Overlays on top of Leaflet layers */
+  color: #0f172a; /* Dark text for perfect readability on light maps */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Title style with a vibrant indigo-to-cyan gradient */
+.sidebar h2 {
+  margin: 0;
+  font-size: 1.50rem;
+  font-weight: 800;
+  letter-spacing: -0.75px;
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Card for holding address boxes */
+.location-box {
+  background: rgba(255, 255, 255, 0.40);
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.location-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.location-label {
+  font-size: 0.70rem;
+  text-transform: uppercase;
+  letter-spacing: 0.75px;
+  color: #475569;
+  font-weight: 700;
+}
+
+.location-value {
+  font-size: 0.875rem;
+  color: #0f172a;
+  font-weight: 500;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.location-value.empty {
+  color: rgba(15, 23, 42, 0.45);
+  font-style: italic;
+}
+
+.location-divider {
+  height: 1px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+/* Error box styles */
+.error-box {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Loading box styles */
+.loading-box {
+  background: rgba(79, 70, 229, 0.1);
+  border: 1px solid rgba(79, 70, 229, 0.25);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #4f46e5;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Route details layout */
+.route-details {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(6, 182, 212, 0.08));
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-label {
+  font-size: 0.70rem;
+  color: #4f46e5;
+  text-transform: uppercase;
+  letter-spacing: 0.75px;
+  font-weight: 700;
+}
+
+.detail-value {
+  font-size: 1.20rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* Reset button styling */
+.reset-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #b91c1c;
+  border-radius: 10px;
+  padding: 12px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  outline: none;
+}
+
+.reset-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #991b1b;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+}
+
+.reset-btn:active {
+  transform: scale(0.98);
+}
+
+/* Soft pulse animation for loading states */
+.pulse {
+  animation: pulse-animation 1.8s infinite ease-in-out;
+}
+
+@keyframes pulse-animation {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
+/* Move Leaflet controls out of the sidebar area */
+.leaflet-left .leaflet-control {
+  margin-left: 400px !important;
+  transition: margin-left 0.3s ease;
+}
+
+@media (max-width: 600px) {
+  .sidebar {
+    width: calc(100% - 32px);
+    top: 16px;
+    left: 16px;
+    padding: 16px;
+    gap: 16px;
+  }
+  .leaflet-left .leaflet-control {
+    margin-left: 10px !important;
+  }
+}

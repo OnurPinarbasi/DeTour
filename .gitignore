@@ -1,0 +1,23 @@
+# Version control ignore rules for DeTour project
+
+# Node/Vite dependencies and builds
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Python virtual environment and caches
+venv/
+backend/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
