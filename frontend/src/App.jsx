@@ -1,4 +1,5 @@
 import MapView from './components/MapView';
+import SplashScreen from './components/SplashScreen';
 
 /**
  * Root component of the DeTour application.
@@ -6,7 +7,10 @@ import MapView from './components/MapView';
  */
 function App() {
   return (
-    <MapView />
+    <>
+      <SplashScreen />
+      <MapView />
+    </>
   );
 }
 
