@@ -214,7 +214,7 @@
   z-index: 9999; /* Higher than Leaflet overlays */
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.5s;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
 }
 
 .splash-overlay.fade-out {
@@ -246,7 +246,7 @@
 .animated-path {
   stroke-dasharray: 290;
   stroke-dashoffset: 290;
-  animation: draw-route 3.0s linear forwards;
+  animation: draw-route 2.6s linear forwards;
 }
 
 @keyframes draw-route {

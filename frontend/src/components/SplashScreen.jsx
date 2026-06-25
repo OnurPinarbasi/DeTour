@@ -11,15 +11,15 @@ function SplashScreen() {
   const [isFading, setIsFading] = useState(false);
 
   useEffect(() => {
-    // Start fade-out animation after 3.0 seconds
+    // Start fade-out animation after 2.6 seconds
     const fadeTimer = setTimeout(() => {
       setIsFading(true);
-    }, 3000);
+    }, 2600);
 
-    // Completely unmount/remove the component from DOM after 3.5 seconds
+    // Completely unmount/remove the component from DOM after 3.0 seconds
     const removeTimer = setTimeout(() => {
       setIsVisible(false);
-    }, 3500);
+    }, 3000);
 
     return () => {
       clearTimeout(fadeTimer);
