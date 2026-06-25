@@ -175,7 +175,7 @@ function MapView() {
     setError(null);
   };
 
-  // Convert GeoJSON longitude/latitude coordinates to Leaflet latitude/longitude format
+  // Convert GeoJSON longitude/latitude coordinates to Leaflet latitude/longitude format // DENEME COMMIT
   const polylinePositions = routeGeometry && routeGeometry.geometry && routeGeometry.geometry.coordinates
     ? routeGeometry.geometry.coordinates.map(coord => [coord[1], coord[0]])
     : [];
