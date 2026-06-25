@@ -244,14 +244,14 @@
 
 /* Path drawing animation */
 .animated-path {
-  stroke-dasharray: 400;
-  stroke-dashoffset: 400;
-  animation: draw-route 2.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  stroke-dasharray: 290;
+  stroke-dashoffset: 290;
+  animation: draw-route 3.0s linear forwards;
 }
 
 @keyframes draw-route {
   from {
-    stroke-dashoffset: 400;
+    stroke-dashoffset: 290;
   }
   to {
     stroke-dashoffset: 0;
@@ -330,29 +330,4 @@
   }
 }
 
-/* Sleek Progress Bar */
-.progress-container {
-  width: 200px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  overflow: hidden;
-}
 
-.progress-bar {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, #8b5cf6 0%, #d946ef 50%, #ec4899 100%);
-  border-radius: 10px;
-  box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
-  animation: fill-progress 2.8s cubic-bezier(0.1, 0.8, 0.1, 1) forwards;
-}
-
-@keyframes fill-progress {
-  0% {
-    width: 0%;
-  }
-  100% {
-    width: 100%;
-  }
-}

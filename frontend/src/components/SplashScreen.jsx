@@ -86,11 +86,6 @@ function SplashScreen() {
         {/* Brand Name */}
         <h1 className="splash-title" id="splash-app-title">DeTour</h1>
         <p className="splash-subtitle">premium route planner</p>
-
-        {/* Sleek Progress Bar */}
-        <div className="progress-container">
-          <div className="progress-bar"></div>
-        </div>
       </div>
     </div>
   );
