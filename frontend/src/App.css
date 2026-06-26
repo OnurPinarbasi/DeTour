@@ -330,4 +330,111 @@
   }
 }
 
+/* ==========================================
+   Glowing Flowing Route Animation (Single Beam)
+   ========================================== */
+
+.route-flow-animation {
+  stroke-dasharray: 80, 3000;
+  animation: flow-route-animation 3.5s linear infinite;
+}
+
+@keyframes flow-route-animation {
+  from {
+    stroke-dashoffset: 3080;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ==========================================
+   Custom Modern SVG Map Markers
+   ========================================== */
+
+.custom-modern-marker {
+  background: transparent;
+  border: none;
+}
+
+.modern-pin {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.3));
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Modern drop-in drop animation */
+  animation: pin-drop-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: bottom center;
+}
+
+.modern-pin:hover {
+  transform: translateY(-4px) scale(1.05);
+}
+
+/* Floating label above the modern SVG pin */
+.modern-marker-label {
+  position: absolute;
+  top: -24px; /* Floating directly above the pin */
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.85); /* Dark semi-transparent slate */
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.75px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none; /* Let clicks pass through to map/marker */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+  
+  /* Staggered label fade-in */
+  animation: label-fade-in 0.3s ease-out 0.35s forwards;
+  opacity: 0;
+}
+
+/* Scale up the labels on hover */
+.modern-pin:hover .modern-marker-label {
+  transform: translateX(-50%) scale(1.05);
+  background: rgba(15, 23, 42, 0.95);
+  opacity: 1; /* Keep visible on hover */
+}
+
+@keyframes pin-drop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-45px) scaleY(0.7);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(4px) scaleY(1.1);
+  }
+  80% {
+    transform: translateY(-2px) scaleY(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes label-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 

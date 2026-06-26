@@ -79,7 +79,7 @@ def get_route(route_request: RouteRequest):
             first_route = data["routes"][0]
             distance = first_route["distance"]
 
-            if distance < 10000:
+            if distance < 20000:
                 raise HTTPException(
                     status_code=400,
                     detail="Route is too short, minimum distance is 20 km"

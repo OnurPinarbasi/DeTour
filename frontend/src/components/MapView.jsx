@@ -5,24 +5,50 @@ import { useRoute } from '../hooks/useRoute';
 import 'leaflet/dist/leaflet.css';
 import '../App.css';
 
-// Custom red icon for the start point marker
-const redIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+// Custom DivIcon for Start Point (From) - Modern SVG gradient pin with inner circle and label
+const startIcon = L.divIcon({
+  html: `
+    <div class="modern-pin start-pin">
+      <svg width="30" height="42" viewBox="0 0 30 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 0C6.71573 0 0 6.71573 0 15C0 26.25 15 42 15 42C15 42 30 26.25 30 15C30 6.71573 23.2843 0 15 0Z" fill="url(#startGrad)"/>
+        <circle cx="15" cy="15" r="5" fill="white"/>
+        <defs>
+          <linearGradient id="startGrad" x1="0" y1="0" x2="30" y2="42" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#818cf8"/>
+            <stop offset="1" stop-color="#4f46e5"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <span class="modern-marker-label">START</span>
+    </div>
+  `,
+  className: 'custom-modern-marker',
+  iconSize: [30, 42],
+  iconAnchor: [15, 42],
+  popupAnchor: [0, -42]
 });
 
-// Custom blue icon for the end point marker
-const blueIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+// Custom DivIcon for Destination Point (To) - Modern SVG gradient pin with inner circle and label
+const endIcon = L.divIcon({
+  html: `
+    <div class="modern-pin end-pin">
+      <svg width="30" height="42" viewBox="0 0 30 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 0C6.71573 0 0 6.71573 0 15C0 26.25 15 42 15 42C15 42 30 26.25 30 15C30 6.71573 23.2843 0 15 0Z" fill="url(#endGrad)"/>
+        <circle cx="15" cy="15" r="5" fill="white"/>
+        <defs>
+          <linearGradient id="endGrad" x1="0" y1="0" x2="30" y2="42" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#22d3ee"/>
+            <stop offset="1" stop-color="#0891b2"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <span class="modern-marker-label">END</span>
+    </div>
+  `,
+  className: 'custom-modern-marker',
+  iconSize: [30, 42],
+  iconAnchor: [15, 42],
+  popupAnchor: [0, -42]
 });
 
 /**
@@ -259,22 +285,35 @@ function MapView() {
         <MapInvalidator />
 
         {startPoint && (
-          <Marker position={startPoint} icon={redIcon}>
+          <Marker position={startPoint} icon={startIcon}>
             <Popup>{startAddress || 'Start Point'}</Popup>
           </Marker>
         )}
 
         {endPoint && (
-          <Marker position={endPoint} icon={blueIcon}>
+          <Marker position={endPoint} icon={endIcon}>
             <Popup>{endAddress || 'Destination Point'}</Popup>
           </Marker>
         )}
 
         {polylinePositions.length > 0 && (
-          <Polyline
-            positions={polylinePositions}
-            pathOptions={{ color: 'blue', weight: 4 }}
-          />
+          <>
+            {/* Base Outer Glow */}
+            <Polyline
+              positions={polylinePositions}
+              pathOptions={{ color: '#818cf8', weight: 10, opacity: 0.3 }}
+            />
+            {/* Core Route Line */}
+            <Polyline
+              positions={polylinePositions}
+              pathOptions={{ color: '#4f46e5', weight: 5, opacity: 0.8 }}
+            />
+            {/* Flowing Glow Pulse */}
+            <Polyline
+              positions={polylinePositions}
+              pathOptions={{ color: '#06b6d4', weight: 3, opacity: 1, className: 'route-flow-animation' }}
+            />
+          </>
         )}
       </MapContainer>
     </div>
