@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List
 import urllib.request
 import urllib.error
 import json
@@ -32,6 +33,14 @@ class RouteRequest(BaseModel):
     start_lng: float
     end_lat: float
     end_lng: float
+
+class PoiRequest(BaseModel):
+    """
+    Schema for POI search requests.
+    Contains the route geometry coordinates list and buffer distance.
+    """
+    route_geometry: List[List[float]]
+    buffer_distance_km: int
 
 @app.get("/")
 def read_root():
@@ -102,3 +111,11 @@ def get_route(route_request: RouteRequest):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred while calling OSRM: {str(e)}")
+
+@app.post("/api/poi")
+def get_pois(poi_request: PoiRequest):
+    """
+    POST endpoint to retrieve POIs within a buffer zone around the route.
+    For now, returns an empty list.
+    """
+    return []

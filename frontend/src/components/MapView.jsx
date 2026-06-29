@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, useMapEvents, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useRoute } from '../hooks/useRoute';
+import BufferZoneSelector from './BufferZoneSelector';
 import 'leaflet/dist/leaflet.css';
 import '../App.css';
 
@@ -134,6 +135,7 @@ function MapView() {
   const [endAddress, setEndAddress] = useState('');
   const [isFetchingStart, setIsFetchingStart] = useState(false);
   const [isFetchingEnd, setIsFetchingEnd] = useState(false);
+  const [bufferDistance, setBufferDistance] = useState(20);
 
   const { fetchRoute, routeGeometry, setRouteGeometry, error, setError, isLoading } = useRoute();
 
@@ -230,6 +232,8 @@ function MapView() {
             </span>
           </div>
         </div>
+
+        <BufferZoneSelector value={bufferDistance} onChange={setBufferDistance} />
 
         {/* Error message display */}
         {error && (

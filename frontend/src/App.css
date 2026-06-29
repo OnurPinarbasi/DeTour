@@ -437,4 +437,70 @@
   }
 }
 
+/* ==========================================
+   Buffer Zone Selector Styles
+   ========================================== */
 
+.buffer-selector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.40);
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.buffer-label {
+  font-size: 0.70rem;
+  text-transform: uppercase;
+  letter-spacing: 0.75px;
+  color: #475569;
+  font-weight: 700;
+}
+
+.buffer-options {
+  position: relative;
+  display: flex;
+  background: rgba(15, 23, 42, 0.04);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.buffer-active-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 3);
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
+.buffer-option-btn {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  text-align: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.buffer-option-btn:hover {
+  color: #0f172a;
+}
+
+.buffer-option-btn.active {
+  color: #8b5cf6;
+}
