@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, useMapEvents, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, useMapEvents, Marker, Popup, Polyline, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { useRoute } from '../hooks/useRoute';
 import { usePOI } from '../hooks/usePOI';
@@ -319,20 +319,29 @@ function MapView() {
   const polylinePositions = routeGeometry && routeGeometry.geometry && routeGeometry.geometry.coordinates
     ? routeGeometry.geometry.coordinates.map(coord => [coord[1], coord[0]])
     : [];
-  const filteredPOIs = pois.filter(poi => {
-    // Category visibility check
-    if (poi.type === 'historic' && !visibleCategories.historic) return false;
-    if (poi.type === 'tourism' && !visibleCategories.tourism) return false;
-    if (poi.type === 'natural' && !visibleCategories.natural) return false;
-    if (poi.type === 'fuel' && !visibleCategories.fuel) return false;
+  const filteredPOIs = (() => {
+    const historicPOIs = pois
+      .filter(poi => poi.type === 'historic' && visibleCategories.historic && poi.distance_to_route <= bufferDistance)
+      .slice(0, 100);
 
-    // Buffer distance corridor check
-    if (poi.type === 'fuel') {
-      return poi.distance_to_route <= 1.0;
-    } else {
-      return poi.distance_to_route <= bufferDistance;
-    }
-  });
+    const tourismPOIs = pois
+      .filter(poi => poi.type === 'tourism' && visibleCategories.tourism && poi.distance_to_route <= bufferDistance)
+      .slice(0, 100);
+
+    const naturalPOIs = pois
+      .filter(poi => poi.type === 'natural' && visibleCategories.natural && poi.distance_to_route <= bufferDistance)
+      .slice(0, 100);
+
+    const fuelPOIs = pois
+      .filter(poi => poi.type === 'fuel' && visibleCategories.fuel && poi.distance_to_route <= 1.0);
+
+    return [
+      ...historicPOIs,
+      ...tourismPOIs,
+      ...naturalPOIs,
+      ...fuelPOIs
+    ];
+  })();
 
   return (
     <div className="map-wrapper">
@@ -467,8 +476,10 @@ function MapView() {
       <MapContainer
         center={centerPosition}
         zoom={defaultZoom}
+        zoomControl={false}
         style={{ height: '100%', width: '100%' }}
       >
+        <ZoomControl position="bottomright" />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -508,7 +519,7 @@ function MapView() {
           </>
         )}
 
-        {filteredPOIs.slice(0, 250).map((poi, idx) => (
+        {filteredPOIs.map((poi, idx) => (
           <Marker 
             key={`${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`}
             position={[poi.lat, poi.lng]} 
