@@ -549,6 +549,27 @@
   color: #475569;
 }
 
+.poi-loader-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.poi-loader-bar-bg {
+  width: 140px;
+  height: 4px;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.poi-loader-bar-fill {
+  height: 100%;
+  background: #8b5cf6;
+  border-radius: 2px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

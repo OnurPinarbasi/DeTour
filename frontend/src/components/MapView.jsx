@@ -181,6 +181,9 @@ const formatDuration = (seconds) => {
  * Renders the route on the map using a blue Polyline.
  */
 function MapView() {
+  const { fetchRoute, routeGeometry, setRouteGeometry, error, setError, isLoading } = useRoute();
+  const { fetchPOIs, pois, setPois, error: poiError, setError: setPoiError, isLoadingPOI: isPoiLoading } = usePOI();
+
   const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
   const [startAddress, setStartAddress] = useState('');
@@ -188,13 +191,14 @@ function MapView() {
   const [isFetchingStart, setIsFetchingStart] = useState(false);
   const [isFetchingEnd, setIsFetchingEnd] = useState(false);
   const [bufferDistance, setBufferDistance] = useState(0);
-  const [debouncedBufferDistance, setDebouncedBufferDistance] = useState(0);
   const [visibleCategories, setVisibleCategories] = useState({
     historic: false,
     tourism: false,
     natural: false,
     fuel: false
   });
+  const [poiProgress, setPoiProgress] = useState(0);
+
 
   const toggleCategory = (category) => {
     setVisibleCategories(prev => ({
@@ -203,23 +207,42 @@ function MapView() {
     }));
   };
 
+  // Simulate progress indicator for POI loading
+  useEffect(() => {
+    let interval;
+    if (isPoiLoading) {
+      setPoiProgress(0);
+      interval = setInterval(() => {
+        setPoiProgress(prev => {
+          if (prev < 20) {
+            return prev + 8;
+          } else if (prev < 50) {
+            return prev + 4;
+          } else if (prev < 80) {
+            return prev + 2;
+          } else if (prev < 96) {
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 400);
+    } else {
+      setPoiProgress(100);
+    }
 
-  const { fetchRoute, routeGeometry, setRouteGeometry, error, setError, isLoading } = useRoute();
-  const { fetchPOIs, pois, setPois, error: poiError, setError: setPoiError, isLoadingPOI: isPoiLoading } = usePOI();
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPoiLoading]);
+
+
+
+
 
   const centerPosition = [39.9334, 32.8597];
   const defaultZoom = 6;
 
-  // Debounce the bufferDistance state changes by 500ms
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedBufferDistance(bufferDistance);
-    }, 500);
 
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [bufferDistance]);
 
   // Fetch routing coordinates from the backend once both start and end points are specified
   useEffect(() => {
@@ -228,14 +251,14 @@ function MapView() {
     }
   }, [startPoint, endPoint, fetchRoute]);
 
-  // Fetch POIs when route geometry or debounced buffer distance changes
+  // Fetch POIs once when route geometry changes (using fixed 30km maximum buffer)
   useEffect(() => {
     if (routeGeometry) {
-      fetchPOIs(routeGeometry, debouncedBufferDistance);
+      fetchPOIs(routeGeometry, 30);
     } else {
       setPois([]);
     }
-  }, [routeGeometry, debouncedBufferDistance, fetchPOIs, setPois]);
+  }, [routeGeometry, fetchPOIs, setPois]);
 
   // Fetch address for start point
   useEffect(() => {
@@ -297,11 +320,18 @@ function MapView() {
     ? routeGeometry.geometry.coordinates.map(coord => [coord[1], coord[0]])
     : [];
   const filteredPOIs = pois.filter(poi => {
-    if (poi.type === 'historic') return visibleCategories.historic;
-    if (poi.type === 'tourism') return visibleCategories.tourism;
-    if (poi.type === 'natural') return visibleCategories.natural;
-    if (poi.type === 'fuel') return visibleCategories.fuel;
-    return false;
+    // Category visibility check
+    if (poi.type === 'historic' && !visibleCategories.historic) return false;
+    if (poi.type === 'tourism' && !visibleCategories.tourism) return false;
+    if (poi.type === 'natural' && !visibleCategories.natural) return false;
+    if (poi.type === 'fuel' && !visibleCategories.fuel) return false;
+
+    // Buffer distance corridor check
+    if (poi.type === 'fuel') {
+      return poi.distance_to_route <= 1.0;
+    } else {
+      return poi.distance_to_route <= bufferDistance;
+    }
   });
 
   return (
@@ -424,7 +454,12 @@ function MapView() {
       {isPoiLoading && (
         <div className="poi-loader">
           <div className="poi-loader-spinner" />
-          <span className="poi-loader-text">Loading nearby places...</span>
+          <div className="poi-loader-content">
+            <span className="poi-loader-text">Loading nearby places... ({poiProgress}%)</span>
+            <div className="poi-loader-bar-bg">
+              <div className="poi-loader-bar-fill" style={{ width: `${poiProgress}%` }} />
+            </div>
+          </div>
         </div>
       )}
 

@@ -127,6 +127,22 @@ def simplify_geometry(coords: List[List[float]], n: int = 10) -> List[List[float
         simplified.append(coords[-1])
     return simplified
 
+def min_distance_to_route(poi_lat: float, poi_lng: float, route_coords: List[List[float]], cos_lat: float) -> float:
+    """
+    Calculates the minimum distance in kilometers from a POI to the route coordinates
+    using a fast flat-surface (equirectangular) approximation.
+    """
+    min_dist = float('inf')
+    for coord in route_coords:
+        # coord is [lng, lat]
+        x = (coord[0] - poi_lng) * cos_lat
+        y = coord[1] - poi_lat
+        dist = math.sqrt(x*x + y*y) * 111.0
+        if dist < min_dist:
+            min_dist = dist
+    return min_dist
+
+
 @app.post("/api/poi")
 def get_pois(poi_request: PoiRequest):
     """
@@ -149,7 +165,9 @@ def get_pois(poi_request: PoiRequest):
 
     # Simplify coords for bounding box calculation
     simplified_coords = simplify_geometry(coords, n=10)
+    simplified_dist_coords = simplify_geometry(coords, n=3)
     print(f"Simplified geometry point count for bbox calculation: {len(simplified_coords)}")
+
 
     try:
         min_lat = min(c[1] for c in simplified_coords)
@@ -304,13 +322,20 @@ def get_pois(poi_request: PoiRequest):
                     if not poi_type:
                         continue
 
+                    # Precise corridor distance filter
+                    max_allowed = 1.0 if poi_type == "fuel" else poi_request.buffer_distance_km
+                    dist_to_route = min_distance_to_route(lat, lng, simplified_dist_coords, cos_lat)
+                    if dist_to_route > max_allowed:
+                        continue
+
                     name = tags.get("name", default_name)
 
                     pois.append({
                         "name": name,
                         "lat": lat,
                         "lng": lng,
-                        "type": poi_type
+                        "type": poi_type,
+                        "distance_to_route": round(dist_to_route, 3)
                     })
 
                 return {
