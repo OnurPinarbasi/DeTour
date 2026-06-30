@@ -4,7 +4,9 @@ from pydantic import BaseModel
 from typing import List
 import urllib.request
 import urllib.error
+import urllib.parse
 import json
+import math
 
 # Initialize the FastAPI application
 app = FastAPI(title="DeTour API")
@@ -112,10 +114,227 @@ def get_route(route_request: RouteRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred while calling OSRM: {str(e)}")
 
+def simplify_geometry(coords: List[List[float]], n: int = 10) -> List[List[float]]:
+    """
+    Simplifies coordinate list by taking every Nth point.
+    Ensures that the first and last points are always kept for integrity.
+    """
+    if not coords or len(coords) <= 2:
+        return coords
+    
+    simplified = [coords[i] for i in range(0, len(coords) - 1, n)]
+    if coords[-1] not in simplified:
+        simplified.append(coords[-1])
+    return simplified
+
 @app.post("/api/poi")
 def get_pois(poi_request: PoiRequest):
     """
     POST endpoint to retrieve POIs within a buffer zone around the route.
-    For now, returns an empty list.
+    Queries Overpass API and returns list of POIs with name, lat, lng, and type.
     """
-    return []
+    coords = poi_request.route_geometry
+    
+    print(f"--- [get_pois] Starting Bounding Box Calculation ---")
+    print(f"Incoming Route Geometry point count: {len(coords) if coords else 0}")
+    print(f"Incoming buffer_distance_km: {poi_request.buffer_distance_km}")
+
+    if not coords:
+        print(f"Warning: No coordinates provided in route geometry.")
+        return {
+            "pois": [],
+            "poi_count": 0,
+            "query_duration_seconds": 0.0
+        }
+
+    # Simplify coords for bounding box calculation
+    simplified_coords = simplify_geometry(coords, n=10)
+    print(f"Simplified geometry point count for bbox calculation: {len(simplified_coords)}")
+
+    try:
+        min_lat = min(c[1] for c in simplified_coords)
+        max_lat = max(c[1] for c in simplified_coords)
+        min_lng = min(c[0] for c in simplified_coords)
+        max_lng = max(c[0] for c in simplified_coords)
+    except Exception as e:
+        print(f"Error calculating min/max bounds: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid route geometry format.")
+
+    avg_lat = (min_lat + max_lat) / 2.0
+    
+    # Calculate degree offset based on buffer_distance_km (1 degree lat is approx 111 km)
+    d_lat = poi_request.buffer_distance_km / 111.0
+    cos_lat = math.cos(math.radians(avg_lat))
+    d_lng = poi_request.buffer_distance_km / (111.0 * cos_lat) if cos_lat > 0 else d_lat
+
+    south = min_lat - d_lat
+    north = max_lat + d_lat
+    west = min_lng - d_lng
+    east = max_lng + d_lng
+
+    # Calculate tight degree offset for fuel stations (only main road, 1.0 km buffer)
+    d_lat_fuel = 1.0 / 111.0
+    d_lng_fuel = 1.0 / (111.0 * cos_lat) if cos_lat > 0 else d_lat_fuel
+
+    south_fuel = min_lat - d_lat_fuel
+    north_fuel = max_lat + d_lat_fuel
+    west_fuel = min_lng - d_lng_fuel
+    east_fuel = max_lng + d_lng_fuel
+
+    print(f"Calculated Bounding Box (Expanded):")
+    print(f"  Min Lat (South): {south:.6f}, Max Lat (North): {north:.6f}")
+    print(f"  Min Lng (West): {west:.6f}, Max Lng (East): {east:.6f}")
+    print(f"Calculated Bounding Box (Fuel / Tight):")
+    print(f"  Min Lat (South): {south_fuel:.6f}, Max Lat (North): {north_fuel:.6f}")
+    print(f"  Min Lng (West): {west_fuel:.6f}, Max Lng (East): {east_fuel:.6f}")
+    print(f"--- [get_pois] Bounding Box Calculation Complete ---")
+
+    # Construct Overpass QL Query
+    query_parts = []
+    
+    # Only query historic, tourism, and natural if buffer > 0
+    if poi_request.buffer_distance_km > 0:
+        query_parts.extend([
+            f"  node[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  relation[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  node[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  relation[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  node[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  relation[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  node[\"natural\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"natural\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  relation[\"natural\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});"
+        ])
+    
+    # Always query fuel stations along the main route
+    query_parts.extend([
+        f"  node[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});",
+        f"  way[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});",
+        f"  relation[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});"
+    ])
+    
+    query_body = "\n".join(query_parts)
+    overpass_query = (
+        f"[out:json][timeout:15];\n"
+        f"(\n"
+        f"{query_body}\n"
+        f");\n"
+        f"out center;"
+    )
+
+    OVERPASS_ENDPOINTS = [
+        "https://overpass-api.de/api/interpreter",
+        "https://lz4.overpass-api.de/api/interpreter",
+        "https://z.overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter"
+    ]
+
+    print(f"--- [get_pois] Sending Query to Overpass API ---")
+    print(f"Overpass Query String:\n{overpass_query}\n")
+
+    import time
+    start_time = time.time()
+    last_http_code = None
+    last_error_msg = ""
+
+    for endpoint in OVERPASS_ENDPOINTS:
+        try:
+            print(f"--- [get_pois] Trying Overpass Endpoint: {endpoint} ---")
+            data = urllib.parse.urlencode({"data": overpass_query}).encode("utf-8")
+            req = urllib.request.Request(
+                endpoint,
+                data=data,
+                headers={"User-Agent": "DeTour-App/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as response:
+                end_time = time.time()
+                duration = end_time - start_time
+                print(f"Overpass Request Duration: {duration:.3f} seconds (using {endpoint})")
+                
+                if response.status != 200:
+                    raise urllib.error.HTTPError(
+                        req.full_url, response.status, "Non-200 response status", response.headers, None
+                    )
+                
+                result = json.loads(response.read().decode())
+                elements = result.get("elements", [])
+                print(f"Overpass returned {len(elements)} raw elements.")
+                
+                pois = []
+                for element in elements:
+                    tags = element.get("tags", {})
+                    
+                    # Determine lat/lng
+                    if element.get("type") == "node":
+                        lat = element.get("lat")
+                        lng = element.get("lon")
+                    else:
+                        center = element.get("center", {})
+                        lat = center.get("lat")
+                        lng = center.get("lon")
+
+                    if lat is None or lng is None:
+                        continue
+
+                    # Determine type and default name
+                    poi_type = None
+                    default_name = "Point of Interest"
+
+                    if "historic" in tags or tags.get("site") == "archaeological":
+                        poi_type = "historic"
+                        subtype = tags.get("historic", "").replace('_', ' ').title()
+                        if tags.get("site") == "archaeological" or subtype == "Archaeological Site":
+                            subtype = "Archaeological Site"
+                        elif not subtype:
+                            subtype = "Historic Site"
+                        default_name = subtype
+                    elif "tourism" in tags:
+                        poi_type = "tourism"
+                        default_name = tags["tourism"].replace('_', ' ').title()
+                    elif "natural" in tags:
+                        poi_type = "natural"
+                        default_name = tags["natural"].replace('_', ' ').title()
+                    elif tags.get("amenity") == "fuel":
+                        poi_type = "fuel"
+                        default_name = "Gas Station"
+
+                    if not poi_type:
+                        continue
+
+                    name = tags.get("name", default_name)
+
+                    pois.append({
+                        "name": name,
+                        "lat": lat,
+                        "lng": lng,
+                        "type": poi_type
+                    })
+
+                return {
+                    "pois": pois,
+                    "poi_count": len(pois),
+                    "query_duration_seconds": round(duration, 3)
+                }
+
+        except urllib.error.HTTPError as e:
+            print(f"Endpoint {endpoint} failed with HTTP Error {e.code}: {e.reason}")
+            last_http_code = e.code
+            last_error_msg = f"HTTP Error {e.code}: {e.reason}"
+        except Exception as e:
+            print(f"Endpoint {endpoint} failed: {str(e)}")
+            last_error_msg = str(e)
+
+    # If we get here, all endpoints failed
+    print(f"All Overpass endpoints failed. Last error: {last_error_msg}")
+    if last_http_code == 429:
+        raise HTTPException(
+            status_code=429, 
+            detail="Overpass API is busy (Too Many Requests). Please wait a moment and try again."
+        )
+    raise HTTPException(
+        status_code=504, 
+        detail="POI search timed out, please try a smaller detour range"
+    )

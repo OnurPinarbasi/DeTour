@@ -5,13 +5,16 @@ import React from 'react';
  * Options: 10 km, 20 km, 30 km.
  */
 function BufferZoneSelector({ value, onChange }) {
-  const options = [10, 20, 30];
+  const options = [0, 10, 20, 30];
   const activeIndex = options.indexOf(value);
 
   return (
     <div className="buffer-selector-container">
-      <span className="buffer-label">Max Deviation Distance</span>
-      <div className="buffer-options">
+      <span className="buffer-label">Detour Limit</span>
+      <div 
+        className="buffer-options" 
+        style={{ '--num-options': options.length }}
+      >
         <div 
           className="buffer-active-indicator" 
           style={{ transform: `translateX(${activeIndex * 100}%)` }}

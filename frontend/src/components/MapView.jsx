@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, useMapEvents, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useRoute } from '../hooks/useRoute';
+import { usePOI } from '../hooks/usePOI';
 import BufferZoneSelector from './BufferZoneSelector';
 import 'leaflet/dist/leaflet.css';
 import '../App.css';
@@ -51,6 +52,57 @@ const endIcon = L.divIcon({
   iconAnchor: [15, 42],
   popupAnchor: [0, -42]
 });
+
+// Helper to create POI marker icons dynamically
+const createPoiIcon = (type) => {
+  let gradStart, gradEnd;
+  
+  if (type === 'historic') {
+    gradStart = '#b45309'; // Brown/Amber
+    gradEnd = '#78350f';
+  } else if (type === 'tourism') {
+    gradStart = '#34d399'; // Teal/Cyan Gradient
+    gradEnd = '#059669';
+  } else if (type === 'natural') {
+    gradStart = '#4ade80'; // Grass Green
+    gradEnd = '#15803d';
+  } else if (type === 'fuel') {
+    gradStart = '#facc15'; // Yellow
+    gradEnd = '#a16207';
+  } else {
+    gradStart = '#94a3b8'; // Default slate
+    gradEnd = '#475569';
+  }
+
+  return L.divIcon({
+    html: `
+      <div class="modern-pin poi-pin-${type}">
+        <svg width="24" height="34" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.37258 0 0 5.37258 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37258 18.6274 0 12 0Z" fill="url(#grad-${type})"/>
+          <circle cx="12" cy="12" r="4" fill="white"/>
+          <defs>
+            <linearGradient id="grad-${type}" x1="0" y1="0" x2="24" y2="34" gradientUnits="userSpaceOnUse">
+              <stop stop-color="${gradStart}"/>
+              <stop offset="1" stop-color="${gradEnd}"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+    `,
+    className: 'custom-modern-marker',
+    iconSize: [24, 34],
+    iconAnchor: [12, 34],
+    popupAnchor: [0, -34]
+  });
+};
+
+const poiIcons = {
+  historic: createPoiIcon('historic'),
+  tourism: createPoiIcon('tourism'),
+  natural: createPoiIcon('natural'),
+  fuel: createPoiIcon('fuel'),
+  default: createPoiIcon('default')
+};
 
 /**
  * Reverse geocodes coordinates to a human-readable address using Nominatim API.
@@ -135,12 +187,39 @@ function MapView() {
   const [endAddress, setEndAddress] = useState('');
   const [isFetchingStart, setIsFetchingStart] = useState(false);
   const [isFetchingEnd, setIsFetchingEnd] = useState(false);
-  const [bufferDistance, setBufferDistance] = useState(20);
+  const [bufferDistance, setBufferDistance] = useState(0);
+  const [debouncedBufferDistance, setDebouncedBufferDistance] = useState(0);
+  const [visibleCategories, setVisibleCategories] = useState({
+    historic: false,
+    tourism: false,
+    natural: false,
+    fuel: false
+  });
+
+  const toggleCategory = (category) => {
+    setVisibleCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
 
   const { fetchRoute, routeGeometry, setRouteGeometry, error, setError, isLoading } = useRoute();
+  const { fetchPOIs, pois, setPois, error: poiError, setError: setPoiError, isLoadingPOI: isPoiLoading } = usePOI();
 
   const centerPosition = [39.9334, 32.8597];
   const defaultZoom = 6;
+
+  // Debounce the bufferDistance state changes by 500ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedBufferDistance(bufferDistance);
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [bufferDistance]);
 
   // Fetch routing coordinates from the backend once both start and end points are specified
   useEffect(() => {
@@ -148,6 +227,15 @@ function MapView() {
       fetchRoute(startPoint, endPoint);
     }
   }, [startPoint, endPoint, fetchRoute]);
+
+  // Fetch POIs when route geometry or debounced buffer distance changes
+  useEffect(() => {
+    if (routeGeometry) {
+      fetchPOIs(routeGeometry, debouncedBufferDistance);
+    } else {
+      setPois([]);
+    }
+  }, [routeGeometry, debouncedBufferDistance, fetchPOIs, setPois]);
 
   // Fetch address for start point
   useEffect(() => {
@@ -186,8 +274,6 @@ function MapView() {
       setStartPoint(latlng);
     } else if (endPoint === null) {
       setEndPoint(latlng);
-    } else {
-      handleReset();
     }
   };
 
@@ -201,6 +287,8 @@ function MapView() {
     setEndAddress('');
     setRouteGeometry(null);
     setError(null);
+    setPoiError(null);
+    setPois([]);
   };
 
   // Convert GeoJSON longitude/latitude coordinates to Leaflet latitude/longitude format  
@@ -208,6 +296,13 @@ function MapView() {
   const polylinePositions = routeGeometry && routeGeometry.geometry && routeGeometry.geometry.coordinates
     ? routeGeometry.geometry.coordinates.map(coord => [coord[1], coord[0]])
     : [];
+  const filteredPOIs = pois.filter(poi => {
+    if (poi.type === 'historic') return visibleCategories.historic;
+    if (poi.type === 'tourism') return visibleCategories.tourism;
+    if (poi.type === 'natural') return visibleCategories.natural;
+    if (poi.type === 'fuel') return visibleCategories.fuel;
+    return false;
+  });
 
   return (
     <div className="map-wrapper">
@@ -235,10 +330,60 @@ function MapView() {
 
         <BufferZoneSelector value={bufferDistance} onChange={setBufferDistance} />
 
+        {/* POI Category Filters */}
+        {routeGeometry && (
+          <div className="poi-filters-container">
+            <span className="poi-filters-title">Filter Points of Interest</span>
+            <div className="poi-filters-grid">
+              <button 
+                type="button"
+                className={`filter-btn historic ${visibleCategories.historic ? 'active' : ''}`}
+                onClick={() => toggleCategory('historic')}
+              >
+                <div className="category-dot historic" />
+                Historic Sites
+              </button>
+              <button 
+                type="button"
+                className={`filter-btn tourism ${visibleCategories.tourism ? 'active' : ''}`}
+                onClick={() => toggleCategory('tourism')}
+              >
+                <div className="category-dot tourism" />
+                Tourism
+              </button>
+              <button 
+                type="button"
+                className={`filter-btn natural ${visibleCategories.natural ? 'active' : ''}`}
+                onClick={() => toggleCategory('natural')}
+              >
+                <div className="category-dot natural" />
+                Nature
+              </button>
+              <button 
+                type="button"
+                className={`filter-btn fuel ${visibleCategories.fuel ? 'active' : ''}`}
+                onClick={() => toggleCategory('fuel')}
+              >
+                <div className="category-dot fuel" />
+                Gas Stations
+              </button>
+            </div>
+          </div>
+        )}
+
+
+
         {/* Error message display */}
         {error && (
           <div className="error-box">
             <span>⚠️ {error}</span>
+          </div>
+        )}
+
+        {/* POI error display */}
+        {poiError && (
+          <div className="error-box">
+            <span>⚠️ {poiError}</span>
           </div>
         )}
 
@@ -274,6 +419,14 @@ function MapView() {
           </button>
         )}
       </div>
+
+      {/* POI Loading Indicator Overlay */}
+      {isPoiLoading && (
+        <div className="poi-loader">
+          <div className="poi-loader-spinner" />
+          <span className="poi-loader-text">Loading nearby places...</span>
+        </div>
+      )}
 
       {/* Map Container */}
       <MapContainer
@@ -319,6 +472,24 @@ function MapView() {
             />
           </>
         )}
+
+        {filteredPOIs.slice(0, 250).map((poi, idx) => (
+          <Marker 
+            key={`${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`}
+            position={[poi.lat, poi.lng]} 
+            icon={poiIcons[poi.type] || poiIcons.default}
+          >
+            <Popup>
+              <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+                <strong style={{ color: '#0f172a' }}>{poi.name}</strong>
+                <br />
+                <span style={{ textTransform: 'capitalize', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                  Category: {poi.type}
+                </span>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
     </div>
   );
