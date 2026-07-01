@@ -222,9 +222,9 @@ def get_pois(poi_request: PoiRequest):
             f"  node[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  way[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  relation[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  node[\"natural\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"natural\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  relation[\"natural\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});"
+            f"  node[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  relation[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});"
         ])
     
     # Always query fuel stations along the main route
@@ -284,6 +284,10 @@ def get_pois(poi_request: PoiRequest):
                 pois = []
                 for element in elements:
                     tags = element.get("tags", {})
+                    
+                    # Exclude peaks as requested by user
+                    if tags.get("natural") == "peak":
+                        continue
                     
                     # Determine lat/lng
                     if element.get("type") == "node":

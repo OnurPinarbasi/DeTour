@@ -61,8 +61,8 @@ const createPoiIcon = (type) => {
     gradStart = '#b45309'; // Brown/Amber
     gradEnd = '#78350f';
   } else if (type === 'tourism') {
-    gradStart = '#34d399'; // Teal/Cyan Gradient
-    gradEnd = '#059669';
+    gradStart = '#22d3ee'; // Cyan
+    gradEnd = '#0891b2';
   } else if (type === 'natural') {
     gradStart = '#4ade80'; // Grass Green
     gradEnd = '#15803d';
@@ -322,14 +322,17 @@ function MapView() {
   const filteredPOIs = (() => {
     const historicPOIs = pois
       .filter(poi => poi.type === 'historic' && visibleCategories.historic && poi.distance_to_route <= bufferDistance)
+      .sort((a, b) => a.distance_to_route - b.distance_to_route)
       .slice(0, 100);
 
     const tourismPOIs = pois
       .filter(poi => poi.type === 'tourism' && visibleCategories.tourism && poi.distance_to_route <= bufferDistance)
+      .sort((a, b) => a.distance_to_route - b.distance_to_route)
       .slice(0, 100);
 
     const naturalPOIs = pois
       .filter(poi => poi.type === 'natural' && visibleCategories.natural && poi.distance_to_route <= bufferDistance)
+      .sort((a, b) => a.distance_to_route - b.distance_to_route)
       .slice(0, 100);
 
     const fuelPOIs = pois
