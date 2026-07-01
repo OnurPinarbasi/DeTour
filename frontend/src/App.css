@@ -349,6 +349,16 @@
 }
 
 /* ==========================================
+   Buffer Zone Corridor Styling
+   ========================================== */
+
+.buffer-zone-bg {
+  transition: stroke-width 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+              stroke-opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+/* ==========================================
    Custom Modern SVG Map Markers
    ========================================== */
 
@@ -505,6 +515,18 @@
   color: #8b5cf6;
 }
 
+.buffer-selector-container.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: not-allowed;
+  filter: grayscale(20%);
+  transition: opacity 0.3s ease;
+}
+
+.buffer-selector-container.disabled .buffer-option-btn {
+  cursor: not-allowed;
+}
+
 /* ==========================================
    POI Loading Indicator Styles
    ========================================== */
@@ -585,6 +607,18 @@
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.poi-filters-container.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: not-allowed;
+  filter: grayscale(20%);
+  transition: opacity 0.3s ease;
+}
+
+.poi-filters-container.disabled .filter-btn {
+  cursor: not-allowed;
 }
 
 .poi-filters-title {
@@ -705,4 +739,38 @@
   border-bottom-left-radius: 8px !important;
   border-bottom-right-radius: 8px !important;
   border-bottom: none !important;
+}
+
+/* ==========================================
+   Map Reset / Transition Animations
+   ========================================== */
+
+.route-line-transition {
+  transition: stroke-width 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+              stroke-opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.map-resetting .modern-pin {
+  animation: pin-fade-out 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes pin-fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0);
+  }
+}
+
+/* Smooth fade-in/fade-out transitions for Leaflet markers */
+.leaflet-marker-icon {
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.leaflet-marker-icon[style*="opacity: 0"],
+.leaflet-marker-icon[style*="opacity:0"] {
+  pointer-events: none !important;
 }

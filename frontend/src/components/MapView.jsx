@@ -174,6 +174,67 @@ const formatDuration = (seconds) => {
 };
 
 /**
+ * Renders a dynamic, visual corridor (buffer zone) around the route.
+ * Automatically scales its weight in pixels according to map zoom level and chosen detour limit.
+ */
+function BufferZone({ positions, distanceKm }) {
+  const map = useMap();
+  const [weight, setWeight] = useState(0);
+
+  const calculateWeight = React.useCallback(() => {
+    if (!positions || positions.length === 0) {
+      setWeight(0);
+      return;
+    }
+    
+    const zoom = map.getZoom();
+    
+    // Average latitude of the route coordinates
+    let sumLat = 0;
+    for (let i = 0; i < positions.length; i++) {
+      sumLat += positions[i][0];
+    }
+    const avgLat = sumLat / positions.length;
+    
+    // Meters per pixel at the current latitude and zoom level
+    const metersPerPixel = (156543.03392 * Math.cos(avgLat * Math.PI / 180)) / Math.pow(2, zoom);
+    
+    // Total diameter of the corridor in pixels
+    const weightPx = (2 * distanceKm * 1000) / metersPerPixel;
+    setWeight(weightPx);
+  }, [map, positions, distanceKm]);
+
+  useEffect(() => {
+    calculateWeight();
+    
+    map.on('zoomend', calculateWeight);
+    map.on('viewreset', calculateWeight);
+    
+    return () => {
+      map.off('zoomend', calculateWeight);
+      map.off('viewreset', calculateWeight);
+    };
+  }, [map, calculateWeight]);
+
+  if (!positions || positions.length === 0) return null;
+
+  return (
+    <Polyline
+      positions={positions}
+      interactive={false}
+      pathOptions={{
+        color: '#6366f1',
+        weight: weight === 0 ? 0.1 : weight,
+        opacity: distanceKm === 0 ? 0.001 : 0.08,
+        lineCap: 'round',
+        lineJoin: 'round',
+        className: 'buffer-zone-bg'
+      }}
+    />
+  );
+}
+
+/**
  * MapView component that renders an interactive Leaflet map.
  * Manages startPoint and endPoint states based on map clicks,
  * displays red and blue markers for start and end positions,
@@ -191,6 +252,8 @@ function MapView() {
   const [isFetchingStart, setIsFetchingStart] = useState(false);
   const [isFetchingEnd, setIsFetchingEnd] = useState(false);
   const [bufferDistance, setBufferDistance] = useState(0);
+  const [isResetting, setIsResetting] = useState(false);
+  const [maxFetchedDistance, setMaxFetchedDistance] = useState(-1);
   const [visibleCategories, setVisibleCategories] = useState({
     historic: false,
     tourism: false,
@@ -201,6 +264,8 @@ function MapView() {
 
 
   const toggleCategory = (category) => {
+    if (isLoading || isPoiLoading) return; // Prevent category toggling while loading
+    
     setVisibleCategories(prev => ({
       ...prev,
       [category]: !prev[category]
@@ -247,18 +312,35 @@ function MapView() {
   // Fetch routing coordinates from the backend once both start and end points are specified
   useEffect(() => {
     if (startPoint && endPoint) {
+      setBufferDistance(0); // Reset detour limit to 0 km when starting route calculation
       fetchRoute(startPoint, endPoint);
     }
-  }, [startPoint, endPoint, fetchRoute]);
+  }, [startPoint, endPoint, fetchRoute, setBufferDistance]);
 
-  // Fetch POIs once when route geometry changes (using fixed 30km maximum buffer)
+  // Reset POI states when route geometry changes (no automatic pre-fetching)
   useEffect(() => {
-    if (routeGeometry) {
-      fetchPOIs(routeGeometry, 30);
-    } else {
-      setPois([]);
+    setPois([]);
+    setMaxFetchedDistance(-1);
+    setBufferDistance(0);
+  }, [routeGeometry, setPois, setBufferDistance]);
+
+  // Fetch POIs on-demand when bufferDistance increases beyond what we have fetched
+  useEffect(() => {
+    if (routeGeometry && bufferDistance > 0 && bufferDistance > maxFetchedDistance) {
+      fetchPOIs(routeGeometry, bufferDistance)
+        .then((data) => {
+          if (data) {
+            setMaxFetchedDistance(bufferDistance);
+          }
+        })
+        .catch((err) => {
+          if (err.name !== 'AbortError') {
+            console.error("Failed to fetch POIs for distance:", bufferDistance, err);
+            setMaxFetchedDistance(-1); // Reset on failure to allow retry
+          }
+        });
     }
-  }, [routeGeometry, fetchPOIs, setPois]);
+  }, [bufferDistance, routeGeometry, maxFetchedDistance, fetchPOIs]);
 
   // Fetch address for start point
   useEffect(() => {
@@ -289,10 +371,11 @@ function MapView() {
   }, [endPoint]);
 
   /**
-   * Handles map clicks to set start/end points or reset them.
-   * @param {Object} latlng - The clicked coordinates containing lat and lng.
+   * ClickHandler callback that updates the start or end coordinates.
    */
   const handleMapClick = (latlng) => {
+    if (isResetting) return; // Prevent clicks during reset transition
+    
     if (startPoint === null) {
       setStartPoint(latlng);
     } else if (endPoint === null) {
@@ -304,14 +387,23 @@ function MapView() {
    * Resets all route data and coordinates.
    */
   const handleReset = () => {
-    setStartPoint(null);
-    setEndPoint(null);
-    setStartAddress('');
-    setEndAddress('');
-    setRouteGeometry(null);
-    setError(null);
-    setPoiError(null);
-    setPois([]);
+    setIsResetting(true);
+    // Smoothly shrink the buffer zone corridor
+    setBufferDistance(0);
+
+    // Smoothly clear states after the fade-out/shrink animations finish (800ms)
+    setTimeout(() => {
+      setStartPoint(null);
+      setEndPoint(null);
+      setStartAddress('');
+      setEndAddress('');
+      setRouteGeometry(null);
+      setError(null);
+      setPoiError(null);
+      setPois([]);
+      setMaxFetchedDistance(-1);
+      setIsResetting(false);
+    }, 800);
   };
 
   // Convert GeoJSON longitude/latitude coordinates to Leaflet latitude/longitude format  
@@ -320,20 +412,24 @@ function MapView() {
     ? routeGeometry.geometry.coordinates.map(coord => [coord[1], coord[0]])
     : [];
   const filteredPOIs = (() => {
+    // Dynamically scale the visible POI limit based on selected detour range (10km -> 100, 20km -> 200, 30km -> 300)
+    // This ensures close POIs are not sacrificed, while still displaying further ones when detour range increases.
+    const limit = bufferDistance <= 10 ? 100 : (bufferDistance <= 20 ? 200 : 300);
+
     const historicPOIs = pois
       .filter(poi => poi.type === 'historic' && visibleCategories.historic && poi.distance_to_route <= bufferDistance)
       .sort((a, b) => a.distance_to_route - b.distance_to_route)
-      .slice(0, 100);
+      .slice(0, limit);
 
     const tourismPOIs = pois
       .filter(poi => poi.type === 'tourism' && visibleCategories.tourism && poi.distance_to_route <= bufferDistance)
       .sort((a, b) => a.distance_to_route - b.distance_to_route)
-      .slice(0, 100);
+      .slice(0, limit);
 
     const naturalPOIs = pois
       .filter(poi => poi.type === 'natural' && visibleCategories.natural && poi.distance_to_route <= bufferDistance)
       .sort((a, b) => a.distance_to_route - b.distance_to_route)
-      .slice(0, 100);
+      .slice(0, limit);
 
     const fuelPOIs = pois
       .filter(poi => poi.type === 'fuel' && visibleCategories.fuel && poi.distance_to_route <= 1.0);
@@ -346,8 +442,25 @@ function MapView() {
     ];
   })();
 
+  // Render pool of all potential POIs up to maximum 300 to support exit/fade transitions
+  const poolPOIs = (() => {
+    const getCategoryPool = (type) => pois
+      .filter(poi => poi.type === type && poi.distance_to_route <= 30)
+      .sort((a, b) => a.distance_to_route - b.distance_to_route)
+      .slice(0, 300);
+
+    return [
+      ...getCategoryPool('historic'),
+      ...getCategoryPool('tourism'),
+      ...getCategoryPool('natural'),
+      ...pois.filter(poi => poi.type === 'fuel' && poi.distance_to_route <= 1.0)
+    ];
+  })();
+
+  const activePoiKeys = new Set(filteredPOIs.map(poi => `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`));
+
   return (
-    <div className="map-wrapper">
+    <div className={`map-wrapper ${isResetting ? 'map-resetting' : ''}`}>
       {/* Sidebar Panel */}
       <div className="sidebar">
         <h2>DeTour - Route Planner</h2>
@@ -370,17 +483,18 @@ function MapView() {
           </div>
         </div>
 
-        <BufferZoneSelector value={bufferDistance} onChange={setBufferDistance} />
+        <BufferZoneSelector value={bufferDistance} onChange={setBufferDistance} disabled={isLoading || isPoiLoading} />
 
         {/* POI Category Filters */}
         {routeGeometry && (
-          <div className="poi-filters-container">
+          <div className={`poi-filters-container ${isLoading || isPoiLoading ? 'disabled' : ''}`}>
             <span className="poi-filters-title">Filter Points of Interest</span>
             <div className="poi-filters-grid">
               <button 
                 type="button"
                 className={`filter-btn historic ${visibleCategories.historic ? 'active' : ''}`}
                 onClick={() => toggleCategory('historic')}
+                disabled={isLoading || isPoiLoading}
               >
                 <div className="category-dot historic" />
                 Historic Sites
@@ -389,6 +503,7 @@ function MapView() {
                 type="button"
                 className={`filter-btn tourism ${visibleCategories.tourism ? 'active' : ''}`}
                 onClick={() => toggleCategory('tourism')}
+                disabled={isLoading || isPoiLoading}
               >
                 <div className="category-dot tourism" />
                 Tourism
@@ -397,6 +512,7 @@ function MapView() {
                 type="button"
                 className={`filter-btn natural ${visibleCategories.natural ? 'active' : ''}`}
                 onClick={() => toggleCategory('natural')}
+                disabled={isLoading || isPoiLoading}
               >
                 <div className="category-dot natural" />
                 Nature
@@ -405,6 +521,7 @@ function MapView() {
                 type="button"
                 className={`filter-btn fuel ${visibleCategories.fuel ? 'active' : ''}`}
                 onClick={() => toggleCategory('fuel')}
+                disabled={isLoading || isPoiLoading}
               >
                 <div className="category-dot fuel" />
                 Gas Stations
@@ -504,41 +621,67 @@ function MapView() {
 
         {polylinePositions.length > 0 && (
           <>
+            {/* Deviation Buffer Zone (Search Corridor) */}
+            <BufferZone positions={polylinePositions} distanceKm={bufferDistance} />
+
             {/* Base Outer Glow */}
             <Polyline
               positions={polylinePositions}
-              pathOptions={{ color: '#818cf8', weight: 10, opacity: 0.3 }}
+              pathOptions={{
+                color: '#818cf8',
+                weight: isResetting ? 0.1 : 10,
+                opacity: isResetting ? 0.001 : 0.3,
+                className: 'route-line-transition'
+              }}
             />
             {/* Core Route Line */}
             <Polyline
               positions={polylinePositions}
-              pathOptions={{ color: '#4f46e5', weight: 5, opacity: 0.8 }}
+              pathOptions={{
+                color: '#4f46e5',
+                weight: isResetting ? 0.1 : 5,
+                opacity: isResetting ? 0.001 : 0.8,
+                className: 'route-line-transition'
+              }}
             />
             {/* Flowing Glow Pulse */}
             <Polyline
               positions={polylinePositions}
-              pathOptions={{ color: '#06b6d4', weight: 3, opacity: 1, className: 'route-flow-animation' }}
+              pathOptions={{
+                color: '#06b6d4',
+                weight: isResetting ? 0.1 : 3,
+                opacity: isResetting ? 0.001 : 1,
+                className: isResetting ? 'route-line-transition' : 'route-flow-animation route-line-transition'
+              }}
             />
           </>
         )}
 
-        {filteredPOIs.map((poi, idx) => (
-          <Marker 
-            key={`${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`}
-            position={[poi.lat, poi.lng]} 
-            icon={poiIcons[poi.type] || poiIcons.default}
-          >
-            <Popup>
-              <div style={{ fontFamily: 'system-ui, sans-serif' }}>
-                <strong style={{ color: '#0f172a' }}>{poi.name}</strong>
-                <br />
-                <span style={{ textTransform: 'capitalize', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
-                  Category: {poi.type}
-                </span>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {poolPOIs.map((poi) => {
+          const key = `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`;
+          const isActive = activePoiKeys.has(key);
+          
+          return (
+            <Marker 
+              key={key}
+              position={[poi.lat, poi.lng]} 
+              icon={poiIcons[poi.type] || poiIcons.default}
+              opacity={isActive ? 1 : 0}
+            >
+              {isActive && (
+                <Popup>
+                  <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+                    <strong style={{ color: '#0f172a' }}>{poi.name}</strong>
+                    <br />
+                    <span style={{ textTransform: 'capitalize', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                      Category: {poi.type}
+                    </span>
+                  </div>
+                </Popup>
+              )}
+            </Marker>
+          );
+        })}
       </MapContainer>
     </div>
   );

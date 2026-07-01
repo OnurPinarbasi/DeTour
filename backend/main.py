@@ -95,10 +95,10 @@ def get_route(route_request: RouteRequest):
                     status_code=400,
                     detail="Route is too short, minimum distance is 20 km"
                 )
-            if distance > 800000:
+            if distance > 600000:
                 raise HTTPException(
                     status_code=400,
-                    detail="Route is too long, maximum distance is 800 km"
+                    detail="Route is too long, maximum distance is 600 km"
                 )
 
             return {
@@ -163,17 +163,14 @@ def get_pois(poi_request: PoiRequest):
             "query_duration_seconds": 0.0
         }
 
-    # Simplify coords for bounding box calculation
-    simplified_coords = simplify_geometry(coords, n=10)
+    # Calculate bounding box using the full route coordinates for maximum precision
     simplified_dist_coords = simplify_geometry(coords, n=3)
-    print(f"Simplified geometry point count for bbox calculation: {len(simplified_coords)}")
-
 
     try:
-        min_lat = min(c[1] for c in simplified_coords)
-        max_lat = max(c[1] for c in simplified_coords)
-        min_lng = min(c[0] for c in simplified_coords)
-        max_lng = max(c[0] for c in simplified_coords)
+        min_lat = min(c[1] for c in coords)
+        max_lat = max(c[1] for c in coords)
+        min_lng = min(c[0] for c in coords)
+        max_lng = max(c[0] for c in coords)
     except Exception as e:
         print(f"Error calculating min/max bounds: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid route geometry format.")
@@ -219,9 +216,9 @@ def get_pois(poi_request: PoiRequest):
             f"  node[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  way[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  relation[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  node[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  relation[\"tourism\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  node[\"tourism\"][\"tourism\"!~\"^(hotel|guest_house|apartment|hostel|motel|chalet|camp_site|camp_pitch|caravan_site|alpine_hut|wilderness_hut)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"tourism\"][\"tourism\"!~\"^(hotel|guest_house|apartment|hostel|motel|chalet|camp_site|camp_pitch|caravan_site|alpine_hut|wilderness_hut)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  relation[\"tourism\"][\"tourism\"!~\"^(hotel|guest_house|apartment|hostel|motel|chalet|camp_site|camp_pitch|caravan_site|alpine_hut|wilderness_hut)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  node[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  way[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  relation[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});"
@@ -314,6 +311,9 @@ def get_pois(poi_request: PoiRequest):
                             subtype = "Historic Site"
                         default_name = subtype
                     elif "tourism" in tags:
+                        tourism_val = tags.get("tourism")
+                        if tourism_val in ["hotel", "guest_house", "apartment", "hostel", "motel", "chalet", "camp_site", "camp_pitch", "caravan_site", "alpine_hut", "wilderness_hut"]:
+                            continue
                         poi_type = "tourism"
                         default_name = tags["tourism"].replace('_', ' ').title()
                     elif "natural" in tags:

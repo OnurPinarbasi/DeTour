@@ -54,13 +54,15 @@ export function usePOI() {
       console.log('POIs response from backend:', data);
       console.log(`[usePOI] Total POIs found: ${data.poi_count}, Query duration: ${data.query_duration_seconds} seconds`);
       setPois(data.pois || []);
+      return data;
     } catch (err) {
       if (err.name === 'AbortError') {
-        return; // Stale request was aborted, ignore and keep current state
+        throw err;
       }
       console.error('Failed to fetch POIs:', err);
       setError(err.message);
       setPois([]);
+      throw err;
     } finally {
       if (abortControllerRef.current === controller) {
         setIsLoadingPOI(false);
