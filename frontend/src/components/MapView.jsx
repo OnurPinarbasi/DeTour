@@ -59,7 +59,7 @@ const endIcon = L.divIcon({
 // Helper to create POI marker icons dynamically
 const createPoiIcon = (type) => {
   let gradStart, gradEnd;
-  
+
   if (type === 'historic') {
     gradStart = '#b45309'; // Brown/Amber
     gradEnd = '#78350f';
@@ -189,19 +189,19 @@ function BufferZone({ positions, distanceKm }) {
       setWeight(0);
       return;
     }
-    
+
     const zoom = map.getZoom();
-    
+
     // Average latitude of the route coordinates
     let sumLat = 0;
     for (let i = 0; i < positions.length; i++) {
       sumLat += positions[i][0];
     }
     const avgLat = sumLat / positions.length;
-    
+
     // Meters per pixel at the current latitude and zoom level
     const metersPerPixel = (156543.03392 * Math.cos(avgLat * Math.PI / 180)) / Math.pow(2, zoom);
-    
+
     // Total diameter of the corridor in pixels
     const weightPx = (2 * distanceKm * 1000) / metersPerPixel;
     setWeight(weightPx);
@@ -209,10 +209,10 @@ function BufferZone({ positions, distanceKm }) {
 
   useEffect(() => {
     calculateWeight();
-    
+
     map.on('zoomend', calculateWeight);
     map.on('viewreset', calculateWeight);
-    
+
     return () => {
       map.off('zoomend', calculateWeight);
       map.off('viewreset', calculateWeight);
@@ -226,7 +226,7 @@ function BufferZone({ positions, distanceKm }) {
       positions={positions}
       interactive={false}
       pathOptions={{
-        color: '#6366f1',
+        color: '#06b6d4',
         weight: weight === 0 ? 0.1 : weight,
         opacity: distanceKm === 0 ? 0.001 : 0.08,
         lineCap: 'round',
@@ -240,89 +240,153 @@ function BufferZone({ positions, distanceKm }) {
 /**
  * Custom POI Cluster component that uses leaflet.markercluster natively.
  */
-function POICluster({ activePOIs, poiIcons }) {
+function POICluster({ activePOIs, poiIcons, visibleCategories }) {
   const map = useMap();
-  const clusterGroupRef = useRef(null);
+  const clusterGroupsRef = useRef({
+    historic: null,
+    tourism: null,
+    natural: null
+  });
   const markersMapRef = useRef(new Map()); // Key -> L.marker instance
+  const fadingTimeoutsRef = useRef(new Map()); // Key -> timeoutId
 
   useEffect(() => {
-    const clusterGroup = L.markerClusterGroup({
-      showCoverageOnHover: false,
-      maxClusterRadius: 55,
-      disableClusteringAtZoom: 16,
-      spiderfyOnMaxZoom: true,
-      iconCreateFunction: (cluster) => {
-        const count = cluster.getChildCount();
-        return L.divIcon({
-          html: `
-            <div class="custom-cluster-icon">
-              <span>${count}</span>
-              <div class="cluster-pulse"></div>
-            </div>
-          `,
-          className: 'custom-cluster-marker',
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
-        });
-      }
-    });
+    const createClusterGroup = (type) => {
+      return L.markerClusterGroup({
+        showCoverageOnHover: false,
+        maxClusterRadius: 40,
+        disableClusteringAtZoom: 18,
+        spiderfyOnMaxZoom: true,
+        iconCreateFunction: (cluster) => {
+          const count = cluster.getChildCount();
+          return L.divIcon({
+            html: `
+              <div class="custom-cluster-icon cluster-icon-${type}">
+                <span>${count}</span>
+                <div class="cluster-pulse"></div>
+              </div>
+            `,
+            className: `custom-cluster-marker cluster-marker-${type}`,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+          });
+        }
+      });
+    };
 
-    map.addLayer(clusterGroup);
-    clusterGroupRef.current = clusterGroup;
+    const groups = {
+      historic: createClusterGroup('historic'),
+      tourism: createClusterGroup('tourism'),
+      natural: createClusterGroup('natural')
+    };
+
+    Object.values(groups).forEach(group => map.addLayer(group));
+    clusterGroupsRef.current = groups;
 
     return () => {
-      if (clusterGroupRef.current) {
-        map.removeLayer(clusterGroupRef.current);
-      }
+      Object.values(groups).forEach(group => {
+        if (map.hasLayer(group)) {
+          map.removeLayer(group);
+        }
+      });
+      // Clean up all scheduled timeouts on unmount
+      fadingTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
     };
   }, [map]);
 
   useEffect(() => {
-    const clusterGroup = clusterGroupRef.current;
-    if (!clusterGroup) return;
+    const groups = clusterGroupsRef.current;
+    if (!groups.historic) return;
 
     const currentMarkersMap = markersMapRef.current;
+    const fadingTimeouts = fadingTimeoutsRef.current;
     const newKeys = new Set();
 
     activePOIs.forEach((poi) => {
+      const isVisible = visibleCategories[poi.type];
       const key = `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`;
-      newKeys.add(key);
 
-      if (!currentMarkersMap.has(key)) {
-        const marker = L.marker([poi.lat, poi.lng], {
-          icon: poiIcons[poi.type] || poiIcons.default
-        });
+      if (isVisible) {
+        newKeys.add(key);
 
-        marker.bindPopup(`
-          <div style="font-family: system-ui, sans-serif;">
-            <strong style="color: #0f172a;">${poi.name}</strong>
-            <br />
-            <span style="text-transform: capitalize; font-size: 0.75rem; color: #64748b; font-weight: bold;">
-              Category: ${poi.type}
-            </span>
-            <br />
-            <span style="font-size: 0.75rem; color: #8b5cf6; font-weight: 500;">
-              Detour Distance: ${poi.distance_to_route.toFixed(2)} km
-            </span>
-          </div>
-        `, {
-          closeButton: false,
-          offset: [0, -10]
-        });
+        if (!currentMarkersMap.has(key)) {
+          const marker = L.marker([poi.lat, poi.lng], {
+            icon: poiIcons[poi.type] || poiIcons.default
+          });
 
-        clusterGroup.addLayer(marker);
-        currentMarkersMap.set(key, marker);
+          marker.bindPopup(`
+            <div style="font-family: system-ui, sans-serif;">
+              <strong style="color: #0f172a;">${poi.name}</strong>
+              <br />
+              <span style="text-transform: capitalize; font-size: 0.75rem; color: #64748b; font-weight: bold;">
+                Category: ${poi.type}
+              </span>
+              <br />
+              <span style="font-size: 0.75rem; color: #8b5cf6; font-weight: 500;">
+                Detour Distance: ${poi.distance_to_route.toFixed(2)} km
+              </span>
+            </div>
+          `, {
+            closeButton: false,
+            offset: [0, -10]
+          });
+
+          if (groups[poi.type]) {
+            groups[poi.type].addLayer(marker);
+          }
+          currentMarkersMap.set(key, marker);
+
+          // Start hidden, then fade/scale in
+          const el = marker.getElement();
+          if (el) el.classList.add('pin-hidden');
+
+          setTimeout(() => {
+            const iconElement = marker.getElement();
+            if (iconElement) {
+              iconElement.classList.remove('pin-hidden');
+            }
+          }, 50);
+        } else {
+          // If marker was fading out, cancel the fade-out timeout and restore it
+          if (fadingTimeouts.has(key)) {
+            clearTimeout(fadingTimeouts.get(key));
+            fadingTimeouts.delete(key);
+
+            const iconElement = currentMarkersMap.get(key).getElement();
+            if (iconElement) {
+              iconElement.classList.remove('pin-hidden');
+            }
+            currentMarkersMap.get(key).setOpacity(1);
+          }
+        }
       }
     });
 
-    // Clean up markers that are no longer active
+    // Clean up markers that are no longer active (fade-out before removal)
     currentMarkersMap.forEach((marker, key) => {
       if (!newKeys.has(key)) {
-        clusterGroup.removeLayer(marker);
-        currentMarkersMap.delete(key);
+        if (fadingTimeouts.has(key)) return; // Already fading
+
+        const iconElement = marker.getElement();
+        if (iconElement) {
+          iconElement.classList.add('pin-hidden');
+        }
+        marker.setOpacity(0);
+
+        const poiType = key.split('-')[0];
+
+        const timeoutId = setTimeout(() => {
+          if (groups[poiType]) {
+            groups[poiType].removeLayer(marker);
+          }
+          currentMarkersMap.delete(key);
+          fadingTimeouts.delete(key);
+        }, 400);
+
+        fadingTimeouts.set(key, timeoutId);
       }
     });
-  }, [activePOIs, poiIcons]);
+  }, [activePOIs, poiIcons, visibleCategories]);
 
   return null;
 }
@@ -358,7 +422,7 @@ function MapView() {
 
   const toggleCategory = (category) => {
     if (isLoading || isPoiLoading) return; // Prevent category toggling while loading
-    
+
     setVisibleCategories(prev => ({
       ...prev,
       [category]: !prev[category]
@@ -410,12 +474,27 @@ function MapView() {
     }
   }, [startPoint, endPoint, fetchRoute, setBufferDistance]);
 
-  // Reset POI states when route geometry changes (no automatic pre-fetching)
+  // Reset POI states when route geometry changes and pre-fetch 1.0 km POIs for Gas Stations
   useEffect(() => {
     setPois([]);
     setMaxFetchedDistance(-1);
     setBufferDistance(0);
-  }, [routeGeometry, setPois, setBufferDistance]);
+
+    if (routeGeometry) {
+      fetchPOIs(routeGeometry, 1.0)
+        .then((data) => {
+          if (data) {
+            setMaxFetchedDistance(1.0);
+          }
+        })
+        .catch((err) => {
+          if (err.name !== 'AbortError') {
+            console.error("Failed to pre-fetch Gas Stations:", err);
+            setMaxFetchedDistance(-1);
+          }
+        });
+    }
+  }, [routeGeometry, setPois, setBufferDistance, fetchPOIs]);
 
   // Fetch POIs on-demand when bufferDistance increases beyond what we have fetched
   useEffect(() => {
@@ -468,7 +547,7 @@ function MapView() {
    */
   const handleMapClick = (latlng) => {
     if (isResetting) return; // Prevent clicks during reset transition
-    
+
     if (startPoint === null) {
       setStartPoint(latlng);
     } else if (endPoint === null) {
@@ -510,22 +589,22 @@ function MapView() {
     const limit = bufferDistance <= 10 ? 100 : (bufferDistance <= 20 ? 200 : 300);
 
     const historicPOIs = pois
-      .filter(poi => poi.type === 'historic' && visibleCategories.historic && poi.distance_to_route <= bufferDistance)
+      .filter(poi => poi.type === 'historic' && poi.distance_to_route <= bufferDistance)
       .sort((a, b) => a.distance_to_route - b.distance_to_route)
       .slice(0, limit);
 
     const tourismPOIs = pois
-      .filter(poi => poi.type === 'tourism' && visibleCategories.tourism && poi.distance_to_route <= bufferDistance)
+      .filter(poi => poi.type === 'tourism' && poi.distance_to_route <= bufferDistance)
       .sort((a, b) => a.distance_to_route - b.distance_to_route)
       .slice(0, limit);
 
     const naturalPOIs = pois
-      .filter(poi => poi.type === 'natural' && visibleCategories.natural && poi.distance_to_route <= bufferDistance)
+      .filter(poi => poi.type === 'natural' && poi.distance_to_route <= bufferDistance)
       .sort((a, b) => a.distance_to_route - b.distance_to_route)
       .slice(0, limit);
 
     const fuelPOIs = pois
-      .filter(poi => poi.type === 'fuel' && visibleCategories.fuel && poi.distance_to_route <= 1.0);
+      .filter(poi => poi.type === 'fuel' && poi.distance_to_route <= 1.0);
 
     return [
       ...historicPOIs,
@@ -536,7 +615,7 @@ function MapView() {
   })();
 
   return (
-    <div className={`map-wrapper ${isResetting ? 'map-resetting' : ''}`}>
+    <div className={`map-wrapper ${isResetting ? 'map-resetting' : ''} ${!visibleCategories.historic ? 'hide-historic' : ''} ${!visibleCategories.tourism ? 'hide-tourism' : ''} ${!visibleCategories.natural ? 'hide-natural' : ''} ${!visibleCategories.fuel ? 'hide-fuel' : ''}`}>
       {/* Sidebar Panel */}
       <div className="sidebar">
         <h2>DeTour - Route Planner</h2>
@@ -566,7 +645,7 @@ function MapView() {
           <div className={`poi-filters-container ${isLoading || isPoiLoading ? 'disabled' : ''}`}>
             <span className="poi-filters-title">Filter Points of Interest</span>
             <div className="poi-filters-grid">
-              <button 
+              <button
                 type="button"
                 className={`filter-btn historic ${visibleCategories.historic ? 'active' : ''}`}
                 onClick={() => toggleCategory('historic')}
@@ -575,7 +654,7 @@ function MapView() {
                 <div className="category-dot historic" />
                 Historic Sites
               </button>
-              <button 
+              <button
                 type="button"
                 className={`filter-btn tourism ${visibleCategories.tourism ? 'active' : ''}`}
                 onClick={() => toggleCategory('tourism')}
@@ -584,7 +663,7 @@ function MapView() {
                 <div className="category-dot tourism" />
                 Tourism
               </button>
-              <button 
+              <button
                 type="button"
                 className={`filter-btn natural ${visibleCategories.natural ? 'active' : ''}`}
                 onClick={() => toggleCategory('natural')}
@@ -593,7 +672,7 @@ function MapView() {
                 <div className="category-dot natural" />
                 Nature
               </button>
-              <button 
+              <button
                 type="button"
                 className={`filter-btn fuel ${visibleCategories.fuel ? 'active' : ''}`}
                 onClick={() => toggleCategory('fuel')}
@@ -677,8 +756,8 @@ function MapView() {
       >
         <ZoomControl position="bottomright" />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         <ClickHandler onMapClick={handleMapClick} />
         <MapInvalidator />
@@ -733,8 +812,38 @@ function MapView() {
           </>
         )}
 
-        {/* Render POIs clustered using our custom POICluster component */}
-        <POICluster activePOIs={filteredPOIs} poiIcons={poiIcons} />
+        {/* Render Gas Stations directly (never clustered) */}
+        {filteredPOIs.filter(poi => poi.type === 'fuel').map((poi) => {
+          const key = `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`;
+          const isVisible = visibleCategories.fuel;
+          return (
+            <Marker
+              key={key}
+              position={[poi.lat, poi.lng]}
+              icon={poiIcons.fuel}
+              opacity={isVisible ? 1 : 0}
+            >
+              {isVisible && (
+                <Popup>
+                  <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+                    <strong style={{ color: '#0f172a' }}>{poi.name}</strong>
+                    <br />
+                    <span style={{ textTransform: 'capitalize', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                      Category: Gas Station
+                    </span>
+                  </div>
+                </Popup>
+              )}
+            </Marker>
+          );
+        })}
+
+        {/* Render other POIs clustered using our custom POICluster component */}
+        <POICluster 
+          activePOIs={filteredPOIs.filter(poi => poi.type !== 'fuel')} 
+          poiIcons={poiIcons} 
+          visibleCategories={visibleCategories} 
+        />
       </MapContainer>
     </div>
   );

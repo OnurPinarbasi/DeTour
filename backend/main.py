@@ -207,28 +207,23 @@ def get_pois(poi_request: PoiRequest):
     # Construct Overpass QL Query
     query_parts = []
     
-    # Only query historic, tourism, and natural if buffer > 0
-    if poi_request.buffer_distance_km > 0:
+    # Only query historic, tourism, and natural if buffer >= 5.0 km (active detour selections)
+    if poi_request.buffer_distance_km >= 5.0:
         query_parts.extend([
             f"  node[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  way[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  relation[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  node[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
             f"  way[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  relation[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  node[\"tourism\"][\"tourism\"!~\"^(hotel|guest_house|apartment|hostel|motel|chalet|camp_site|camp_pitch|caravan_site|alpine_hut|wilderness_hut)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"tourism\"][\"tourism\"!~\"^(hotel|guest_house|apartment|hostel|motel|chalet|camp_site|camp_pitch|caravan_site|alpine_hut|wilderness_hut)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  relation[\"tourism\"][\"tourism\"!~\"^(hotel|guest_house|apartment|hostel|motel|chalet|camp_site|camp_pitch|caravan_site|alpine_hut|wilderness_hut)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  node[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  relation[\"natural\"][\"natural\"!=\"peak\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});"
+            f"  node[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  node[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
+            f"  way[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});"
         ])
     
     # Always query fuel stations along the main route
     query_parts.extend([
         f"  node[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});",
-        f"  way[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});",
-        f"  relation[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});"
+        f"  way[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});"
     ])
     
     query_body = "\n".join(query_parts)
@@ -264,7 +259,7 @@ def get_pois(poi_request: PoiRequest):
                 data=data,
                 headers={"User-Agent": "DeTour-App/1.0"}
             )
-            with urllib.request.urlopen(req, timeout=8) as response:
+            with urllib.request.urlopen(req, timeout=12) as response:
                 end_time = time.time()
                 duration = end_time - start_time
                 print(f"Overpass Request Duration: {duration:.3f} seconds (using {endpoint})")
@@ -282,8 +277,28 @@ def get_pois(poi_request: PoiRequest):
                 for element in elements:
                     tags = element.get("tags", {})
                     
-                    # Exclude peaks as requested by user
+                    # Skip nameless items to prevent map clutter
+                    name = tags.get("name", "")
+                    if ("natural" in tags or "tourism" in tags) and not name:
+                        continue
+                    
+                    # Skip peak tags
                     if tags.get("natural") == "peak":
+                        continue
+
+                    # Skip industrial/storage water reservoirs, wastewater basins, and canals
+                    if tags.get("natural") == "water" and tags.get("water") in ["reservoir", "basin", "wastewater", "canal", "ditch"]:
+                        continue
+
+                    # Road-trip garbage name filter (excludes diving reefs, sunken planes, cell towers, water towers, transformers, etc.)
+                    name_lower = name.lower()
+                    blocked_terms = [
+                        "airbus", "su deposu", "water reservoir", "water tank", 
+                        "dalış noktası", "dalis noktasi", "dive site", "underwater", 
+                        "batık", "batigi", "wreck", "reef", "baz istasyonu", 
+                        "cell tower", "trafo", "transformer", "su kulesi", "water tower"
+                    ]
+                    if any(term in name_lower for term in blocked_terms):
                         continue
                     
                     # Determine lat/lng
@@ -311,12 +326,15 @@ def get_pois(poi_request: PoiRequest):
                             subtype = "Historic Site"
                         default_name = subtype
                     elif "tourism" in tags:
-                        tourism_val = tags.get("tourism")
-                        if tourism_val in ["hotel", "guest_house", "apartment", "hostel", "motel", "chalet", "camp_site", "camp_pitch", "caravan_site", "alpine_hut", "wilderness_hut"]:
+                        # Require a valid name tag for tourism POIs to prevent nameless pins
+                        if "name" not in tags:
                             continue
                         poi_type = "tourism"
                         default_name = tags["tourism"].replace('_', ' ').title()
                     elif "natural" in tags:
+                        # Require a valid name tag for natural POIs to prevent nameless pins
+                        if "name" not in tags:
+                            continue
                         poi_type = "natural"
                         default_name = tags["natural"].replace('_', ' ').title()
                     elif tags.get("amenity") == "fuel":

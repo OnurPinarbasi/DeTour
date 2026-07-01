@@ -14,14 +14,17 @@
   width: 360px;
   max-width: calc(100% - 48px);
   max-height: calc(100vh - 48px);
-  background: rgba(255, 255, 255, 0.20); /* Highly transparent frosted glass */
+  background: rgba(255, 255, 255, 0.20);
+  /* Highly transparent frosted glass */
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 16px;
   box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.12);
-  z-index: 1000; /* Overlays on top of Leaflet layers */
-  color: #0f172a; /* Dark text for perfect readability on light maps */
+  z-index: 1000;
+  /* Overlays on top of Leaflet layers */
+  color: #0f172a;
+  /* Dark text for perfect readability on light maps */
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   padding: 24px;
   box-sizing: border-box;
@@ -174,8 +177,15 @@
 }
 
 @keyframes pulse-animation {
-  0%, 100% { opacity: 0.65; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Move Leaflet controls out of the sidebar area */
@@ -192,6 +202,7 @@
     padding: 16px;
     gap: 16px;
   }
+
   .leaflet-left .leaflet-control {
     margin-left: 10px !important;
   }
@@ -211,7 +222,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999; /* Higher than Leaflet overlays */
+  z-index: 9999;
+  /* Higher than Leaflet overlays */
   opacity: 1;
   visibility: visible;
   transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
@@ -253,6 +265,7 @@
   from {
     stroke-dashoffset: 290;
   }
+
   to {
     stroke-dashoffset: 0;
   }
@@ -271,10 +284,13 @@
 }
 
 @keyframes pulse-glow {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(0.8);
     opacity: 0.15;
   }
+
   50% {
     transform: scale(1.6);
     opacity: 0.6;
@@ -300,6 +316,7 @@
     transform: translateY(20px) scale(0.95);
     opacity: 0;
   }
+
   100% {
     transform: translateY(0) scale(1);
     opacity: 1;
@@ -324,6 +341,7 @@
     transform: translateY(12px);
     opacity: 0;
   }
+
   100% {
     transform: translateY(0);
     opacity: 1;
@@ -343,6 +361,7 @@
   from {
     stroke-dashoffset: 3080;
   }
+
   to {
     stroke-dashoffset: 0;
   }
@@ -353,8 +372,8 @@
    ========================================== */
 
 .buffer-zone-bg {
-  transition: stroke-width 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
-              stroke-opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: stroke-width 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    stroke-opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
 
@@ -374,7 +393,7 @@
   align-items: center;
   filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.3));
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   /* Modern drop-in drop animation */
   animation: pin-drop-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
   transform-origin: bottom center;
@@ -387,10 +406,12 @@
 /* Floating label above the modern SVG pin */
 .modern-marker-label {
   position: absolute;
-  top: -24px; /* Floating directly above the pin */
+  top: -24px;
+  /* Floating directly above the pin */
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.85); /* Dark semi-transparent slate */
+  background: rgba(15, 23, 42, 0.85);
+  /* Dark semi-transparent slate */
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -402,10 +423,11 @@
   padding: 2px 8px;
   border-radius: 6px;
   white-space: nowrap;
-  pointer-events: none; /* Let clicks pass through to map/marker */
+  pointer-events: none;
+  /* Let clicks pass through to map/marker */
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
   transition: all 0.2s ease;
-  
+
   /* Staggered label fade-in */
   animation: label-fade-in 0.3s ease-out 0.35s forwards;
   opacity: 0;
@@ -415,7 +437,8 @@
 .modern-pin:hover .modern-marker-label {
   transform: translateX(-50%) scale(1.05);
   background: rgba(15, 23, 42, 0.95);
-  opacity: 1; /* Keep visible on hover */
+  opacity: 1;
+  /* Keep visible on hover */
 }
 
 @keyframes pin-drop-in {
@@ -423,13 +446,16 @@
     opacity: 0;
     transform: translateY(-45px) scaleY(0.7);
   }
+
   60% {
     opacity: 1;
     transform: translateY(4px) scaleY(1.1);
   }
+
   80% {
     transform: translateY(-2px) scaleY(0.95);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scaleY(1);
@@ -441,6 +467,7 @@
     opacity: 0;
     transform: translateX(-50%) translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
@@ -551,8 +578,15 @@
 }
 
 @keyframes fade-in-poi-loader {
-  from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .poi-loader-spinner {
@@ -593,7 +627,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ==========================================
@@ -658,10 +694,21 @@
   flex-shrink: 0;
 }
 
-.category-dot.historic { background: #b45309; }
-.category-dot.tourism { background: #0891b2; }
-.category-dot.natural { background: #16a34a; }
-.category-dot.fuel { background: #a16207; }
+.category-dot.historic {
+  background: #b45309;
+}
+
+.category-dot.tourism {
+  background: #0891b2;
+}
+
+.category-dot.natural {
+  background: #16a34a;
+}
+
+.category-dot.fuel {
+  background: #a16207;
+}
 
 .filter-btn:hover {
   background: rgba(255, 255, 255, 0.8);
@@ -746,8 +793,8 @@
    ========================================== */
 
 .route-line-transition {
-  transition: stroke-width 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
-              stroke-opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: stroke-width 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    stroke-opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .map-resetting .modern-pin {
@@ -759,19 +806,41 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+
   to {
     opacity: 0;
     transform: translateY(-20px) scale(0);
   }
 }
 
-/* Smooth fade-in/fade-out transitions for Leaflet markers */
-.leaflet-marker-icon {
+/* Smooth fade-in/fade-out transitions for individual Leaflet markers (excluding clusters to preserve fly-out animations) */
+.custom-modern-marker {
   transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
+.custom-modern-marker .modern-pin {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transform-origin: bottom center;
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.custom-modern-marker.pin-hidden .modern-pin,
+.hide-historic .poi-pin-historic,
+.hide-historic .cluster-icon-historic,
+.hide-tourism .poi-pin-tourism,
+.hide-tourism .cluster-icon-tourism,
+.hide-natural .poi-pin-natural,
+.hide-natural .cluster-icon-natural,
+.hide-fuel .poi-pin-fuel {
+  opacity: 0 !important;
+  transform: scale(0) translateY(-15px) !important;
+  pointer-events: none !important;
+}
+
 .leaflet-marker-icon[style*="opacity: 0"],
-.leaflet-marker-icon[style*="opacity:0"] {
+.leaflet-marker-icon[style*="opacity:0"],
+.leaflet-marker-icon.pin-hidden {
   pointer-events: none !important;
 }
 
@@ -788,7 +857,8 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.85); /* Premium glassmorphic slate */
+  background: rgba(15, 23, 42, 0.85);
+  /* Premium glassmorphic slate */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
@@ -798,9 +868,11 @@
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 0.85rem;
-  border: 2px solid rgba(139, 92, 246, 0.5); /* Glowing indigo border */
-  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.25), 
-              inset 0 1px 4px rgba(255, 255, 255, 0.2); /* Glass top reflection */
+  border: 2px solid rgba(139, 92, 246, 0.5);
+  /* Glowing indigo border */
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.25),
+    inset 0 1px 4px rgba(255, 255, 255, 0.2);
+  /* Glass top reflection */
   position: relative;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -808,9 +880,10 @@
 .custom-cluster-icon:hover {
   transform: scale(1.1);
   background: rgba(15, 23, 42, 0.95);
-  border-color: rgba(6, 182, 212, 0.8); /* Glow cyan on hover */
-  box-shadow: 0 12px 30px rgba(6, 182, 212, 0.4), 
-              inset 0 1px 6px rgba(255, 255, 255, 0.3);
+  border-color: rgba(6, 182, 212, 0.8);
+  /* Glow cyan on hover */
+  box-shadow: 0 12px 30px rgba(6, 182, 212, 0.4),
+    inset 0 1px 6px rgba(255, 255, 255, 0.3);
 }
 
 .custom-cluster-icon span {
@@ -838,12 +911,14 @@
     opacity: 0.3;
     border-color: rgba(139, 92, 246, 0.2);
   }
+
   50% {
     transform: scale(1.08);
     opacity: 1;
     border-color: rgba(6, 182, 212, 0.4);
     box-shadow: 0 0 12px rgba(6, 182, 212, 0.1);
   }
+
   100% {
     transform: scale(0.92);
     opacity: 0.3;
