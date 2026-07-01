@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, useMapEvents, Marker, Popup, Polyline, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { useRoute } from '../hooks/useRoute';
 import { usePOI } from '../hooks/usePOI';
 import BufferZoneSelector from './BufferZoneSelector';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import '../App.css';
 
 // Custom DivIcon for Start Point (From) - Modern SVG gradient pin with inner circle and label
@@ -235,6 +238,96 @@ function BufferZone({ positions, distanceKm }) {
 }
 
 /**
+ * Custom POI Cluster component that uses leaflet.markercluster natively.
+ */
+function POICluster({ activePOIs, poiIcons }) {
+  const map = useMap();
+  const clusterGroupRef = useRef(null);
+  const markersMapRef = useRef(new Map()); // Key -> L.marker instance
+
+  useEffect(() => {
+    const clusterGroup = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 55,
+      disableClusteringAtZoom: 16,
+      spiderfyOnMaxZoom: true,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: `
+            <div class="custom-cluster-icon">
+              <span>${count}</span>
+              <div class="cluster-pulse"></div>
+            </div>
+          `,
+          className: 'custom-cluster-marker',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        });
+      }
+    });
+
+    map.addLayer(clusterGroup);
+    clusterGroupRef.current = clusterGroup;
+
+    return () => {
+      if (clusterGroupRef.current) {
+        map.removeLayer(clusterGroupRef.current);
+      }
+    };
+  }, [map]);
+
+  useEffect(() => {
+    const clusterGroup = clusterGroupRef.current;
+    if (!clusterGroup) return;
+
+    const currentMarkersMap = markersMapRef.current;
+    const newKeys = new Set();
+
+    activePOIs.forEach((poi) => {
+      const key = `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`;
+      newKeys.add(key);
+
+      if (!currentMarkersMap.has(key)) {
+        const marker = L.marker([poi.lat, poi.lng], {
+          icon: poiIcons[poi.type] || poiIcons.default
+        });
+
+        marker.bindPopup(`
+          <div style="font-family: system-ui, sans-serif;">
+            <strong style="color: #0f172a;">${poi.name}</strong>
+            <br />
+            <span style="text-transform: capitalize; font-size: 0.75rem; color: #64748b; font-weight: bold;">
+              Category: ${poi.type}
+            </span>
+            <br />
+            <span style="font-size: 0.75rem; color: #8b5cf6; font-weight: 500;">
+              Detour Distance: ${poi.distance_to_route.toFixed(2)} km
+            </span>
+          </div>
+        `, {
+          closeButton: false,
+          offset: [0, -10]
+        });
+
+        clusterGroup.addLayer(marker);
+        currentMarkersMap.set(key, marker);
+      }
+    });
+
+    // Clean up markers that are no longer active
+    currentMarkersMap.forEach((marker, key) => {
+      if (!newKeys.has(key)) {
+        clusterGroup.removeLayer(marker);
+        currentMarkersMap.delete(key);
+      }
+    });
+  }, [activePOIs, poiIcons]);
+
+  return null;
+}
+
+/**
  * MapView component that renders an interactive Leaflet map.
  * Manages startPoint and endPoint states based on map clicks,
  * displays red and blue markers for start and end positions,
@@ -442,23 +535,6 @@ function MapView() {
     ];
   })();
 
-  // Render pool of all potential POIs up to maximum 300 to support exit/fade transitions
-  const poolPOIs = (() => {
-    const getCategoryPool = (type) => pois
-      .filter(poi => poi.type === type && poi.distance_to_route <= 30)
-      .sort((a, b) => a.distance_to_route - b.distance_to_route)
-      .slice(0, 300);
-
-    return [
-      ...getCategoryPool('historic'),
-      ...getCategoryPool('tourism'),
-      ...getCategoryPool('natural'),
-      ...pois.filter(poi => poi.type === 'fuel' && poi.distance_to_route <= 1.0)
-    ];
-  })();
-
-  const activePoiKeys = new Set(filteredPOIs.map(poi => `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`));
-
   return (
     <div className={`map-wrapper ${isResetting ? 'map-resetting' : ''}`}>
       {/* Sidebar Panel */}
@@ -657,31 +733,8 @@ function MapView() {
           </>
         )}
 
-        {poolPOIs.map((poi) => {
-          const key = `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`;
-          const isActive = activePoiKeys.has(key);
-          
-          return (
-            <Marker 
-              key={key}
-              position={[poi.lat, poi.lng]} 
-              icon={poiIcons[poi.type] || poiIcons.default}
-              opacity={isActive ? 1 : 0}
-            >
-              {isActive && (
-                <Popup>
-                  <div style={{ fontFamily: 'system-ui, sans-serif' }}>
-                    <strong style={{ color: '#0f172a' }}>{poi.name}</strong>
-                    <br />
-                    <span style={{ textTransform: 'capitalize', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
-                      Category: {poi.type}
-                    </span>
-                  </div>
-                </Popup>
-              )}
-            </Marker>
-          );
-        })}
+        {/* Render POIs clustered using our custom POICluster component */}
+        <POICluster activePOIs={filteredPOIs} poiIcons={poiIcons} />
       </MapContainer>
     </div>
   );

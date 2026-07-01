@@ -774,3 +774,79 @@
 .leaflet-marker-icon[style*="opacity:0"] {
   pointer-events: none !important;
 }
+
+/* ==========================================
+   Leaflet Marker Cluster Styles
+   ========================================== */
+
+.custom-cluster-marker {
+  background: transparent;
+  border: none;
+}
+
+.custom-cluster-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.85); /* Premium glassmorphic slate */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border: 2px solid rgba(139, 92, 246, 0.5); /* Glowing indigo border */
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.25), 
+              inset 0 1px 4px rgba(255, 255, 255, 0.2); /* Glass top reflection */
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.custom-cluster-icon:hover {
+  transform: scale(1.1);
+  background: rgba(15, 23, 42, 0.95);
+  border-color: rgba(6, 182, 212, 0.8); /* Glow cyan on hover */
+  box-shadow: 0 12px 30px rgba(6, 182, 212, 0.4), 
+              inset 0 1px 6px rgba(255, 255, 255, 0.3);
+}
+
+.custom-cluster-icon span {
+  z-index: 2;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Subtle, breathing ring instead of a distracting ping */
+.cluster-pulse {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  animation: cluster-pulse-glow 2.5s infinite ease-in-out;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes cluster-pulse-glow {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.3;
+    border-color: rgba(139, 92, 246, 0.2);
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+    border-color: rgba(6, 182, 212, 0.4);
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.1);
+  }
+  100% {
+    transform: scale(0.92);
+    opacity: 0.3;
+    border-color: rgba(139, 92, 246, 0.2);
+  }
+}
