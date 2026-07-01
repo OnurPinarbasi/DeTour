@@ -249,6 +249,22 @@ function POICluster({ activePOIs, poiIcons, visibleCategories }) {
   });
   const markersMapRef = useRef(new Map()); // Key -> L.marker instance
   const fadingTimeoutsRef = useRef(new Map()); // Key -> timeoutId
+  const prevVisibleCategoriesRef = useRef(visibleCategories);
+
+  useEffect(() => {
+    const prev = prevVisibleCategoriesRef.current;
+    let didDisable = false;
+    for (const key in visibleCategories) {
+      if (prev[key] && !visibleCategories[key]) {
+        didDisable = true;
+      }
+    }
+    prevVisibleCategoriesRef.current = visibleCategories;
+
+    if (didDisable && map) {
+      map.closePopup();
+    }
+  }, [visibleCategories, map]);
 
   useEffect(() => {
     const createClusterGroup = (type) => {
@@ -381,7 +397,7 @@ function POICluster({ activePOIs, poiIcons, visibleCategories }) {
           }
           currentMarkersMap.delete(key);
           fadingTimeouts.delete(key);
-        }, 400);
+        }, 1500);
 
         fadingTimeouts.set(key, timeoutId);
       }
