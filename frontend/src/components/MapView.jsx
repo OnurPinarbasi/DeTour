@@ -242,80 +242,46 @@ function BufferZone({ positions, distanceKm }) {
  */
 function POICluster({ activePOIs, poiIcons, visibleCategories }) {
   const map = useMap();
-  const clusterGroupsRef = useRef({
-    historic: null,
-    tourism: null,
-    natural: null
-  });
+  const clusterGroupRef = useRef(null);
   const markersMapRef = useRef(new Map()); // Key -> L.marker instance
-  const fadingTimeoutsRef = useRef(new Map()); // Key -> timeoutId
-  const prevVisibleCategoriesRef = useRef(visibleCategories);
 
   useEffect(() => {
-    const prev = prevVisibleCategoriesRef.current;
-    let didDisable = false;
-    for (const key in visibleCategories) {
-      if (prev[key] && !visibleCategories[key]) {
-        didDisable = true;
+    const clusterGroup = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 40,
+      disableClusteringAtZoom: 18,
+      spiderfyOnMaxZoom: true,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: `
+            <div class="custom-cluster-icon">
+              <span>${count}</span>
+              <div class="cluster-pulse"></div>
+            </div>
+          `,
+          className: 'custom-cluster-marker',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        });
       }
-    }
-    prevVisibleCategoriesRef.current = visibleCategories;
+    });
 
-    if (didDisable && map) {
-      map.closePopup();
-    }
-  }, [visibleCategories, map]);
-
-  useEffect(() => {
-    const createClusterGroup = (type) => {
-      return L.markerClusterGroup({
-        showCoverageOnHover: false,
-        maxClusterRadius: 40,
-        disableClusteringAtZoom: 18,
-        spiderfyOnMaxZoom: true,
-        iconCreateFunction: (cluster) => {
-          const count = cluster.getChildCount();
-          return L.divIcon({
-            html: `
-              <div class="custom-cluster-icon cluster-icon-${type}">
-                <span>${count}</span>
-                <div class="cluster-pulse"></div>
-              </div>
-            `,
-            className: `custom-cluster-marker cluster-marker-${type}`,
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
-          });
-        }
-      });
-    };
-
-    const groups = {
-      historic: createClusterGroup('historic'),
-      tourism: createClusterGroup('tourism'),
-      natural: createClusterGroup('natural')
-    };
-
-    Object.values(groups).forEach(group => map.addLayer(group));
-    clusterGroupsRef.current = groups;
+    map.addLayer(clusterGroup);
+    clusterGroupRef.current = clusterGroup;
 
     return () => {
-      Object.values(groups).forEach(group => {
-        if (map.hasLayer(group)) {
-          map.removeLayer(group);
-        }
-      });
-      // Clean up all scheduled timeouts on unmount
-      fadingTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      if (clusterGroupRef.current) {
+        map.removeLayer(clusterGroupRef.current);
+      }
     };
   }, [map]);
 
   useEffect(() => {
-    const groups = clusterGroupsRef.current;
-    if (!groups.historic) return;
+    const clusterGroup = clusterGroupRef.current;
+    if (!clusterGroup) return;
 
     const currentMarkersMap = markersMapRef.current;
-    const fadingTimeouts = fadingTimeoutsRef.current;
     const newKeys = new Set();
 
     activePOIs.forEach((poi) => {
@@ -347,59 +313,17 @@ function POICluster({ activePOIs, poiIcons, visibleCategories }) {
             offset: [0, -10]
           });
 
-          if (groups[poi.type]) {
-            groups[poi.type].addLayer(marker);
-          }
+          clusterGroup.addLayer(marker);
           currentMarkersMap.set(key, marker);
-
-          // Start hidden, then fade/scale in
-          const el = marker.getElement();
-          if (el) el.classList.add('pin-hidden');
-
-          setTimeout(() => {
-            const iconElement = marker.getElement();
-            if (iconElement) {
-              iconElement.classList.remove('pin-hidden');
-            }
-          }, 50);
-        } else {
-          // If marker was fading out, cancel the fade-out timeout and restore it
-          if (fadingTimeouts.has(key)) {
-            clearTimeout(fadingTimeouts.get(key));
-            fadingTimeouts.delete(key);
-
-            const iconElement = currentMarkersMap.get(key).getElement();
-            if (iconElement) {
-              iconElement.classList.remove('pin-hidden');
-            }
-            currentMarkersMap.get(key).setOpacity(1);
-          }
         }
       }
     });
 
-    // Clean up markers that are no longer active (fade-out before removal)
+    // Clean up markers that are no longer active
     currentMarkersMap.forEach((marker, key) => {
       if (!newKeys.has(key)) {
-        if (fadingTimeouts.has(key)) return; // Already fading
-
-        const iconElement = marker.getElement();
-        if (iconElement) {
-          iconElement.classList.add('pin-hidden');
-        }
-        marker.setOpacity(0);
-
-        const poiType = key.split('-')[0];
-
-        const timeoutId = setTimeout(() => {
-          if (groups[poiType]) {
-            groups[poiType].removeLayer(marker);
-          }
-          currentMarkersMap.delete(key);
-          fadingTimeouts.delete(key);
-        }, 1500);
-
-        fadingTimeouts.set(key, timeoutId);
+        clusterGroup.removeLayer(marker);
+        currentMarkersMap.delete(key);
       }
     });
   }, [activePOIs, poiIcons, visibleCategories]);
@@ -829,27 +753,23 @@ function MapView() {
         )}
 
         {/* Render Gas Stations directly (never clustered) */}
-        {filteredPOIs.filter(poi => poi.type === 'fuel').map((poi) => {
+        {filteredPOIs.filter(poi => poi.type === 'fuel' && visibleCategories.fuel).map((poi) => {
           const key = `${poi.type}-${poi.lat}-${poi.lng}-${poi.name}`;
-          const isVisible = visibleCategories.fuel;
           return (
             <Marker
               key={key}
               position={[poi.lat, poi.lng]}
               icon={poiIcons.fuel}
-              opacity={isVisible ? 1 : 0}
             >
-              {isVisible && (
-                <Popup>
-                  <div style={{ fontFamily: 'system-ui, sans-serif' }}>
-                    <strong style={{ color: '#0f172a' }}>{poi.name}</strong>
-                    <br />
-                    <span style={{ textTransform: 'capitalize', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
-                      Category: Gas Station
-                    </span>
-                  </div>
-                </Popup>
-              )}
+              <Popup>
+                <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+                  <strong style={{ color: '#0f172a' }}>{poi.name}</strong>
+                  <br />
+                  <span style={{ textTransform: 'capitalize', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                    Category: Gas Station
+                  </span>
+                </div>
+              </Popup>
             </Marker>
           );
         })}
