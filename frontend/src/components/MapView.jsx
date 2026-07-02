@@ -524,9 +524,9 @@ function MapView() {
     ? routeGeometry.geometry.coordinates.map(coord => [coord[1], coord[0]])
     : [];
   const filteredPOIs = (() => {
-    // Dynamically scale the visible POI limit based on selected detour range (10km -> 100, 20km -> 200, 30km -> 300)
+    // Dynamically scale the visible POI limit based on selected detour range (10km -> 200, 20km -> 300, 30km -> 400)
     // This ensures close POIs are not sacrificed, while still displaying further ones when detour range increases.
-    const limit = bufferDistance <= 10 ? 100 : (bufferDistance <= 20 ? 200 : 300);
+    const limit = bufferDistance <= 10 ? 200 : (bufferDistance <= 20 ? 300 : 400);
 
     const historicPOIs = pois
       .filter(poi => poi.type === 'historic' && poi.distance_to_route <= bufferDistance)

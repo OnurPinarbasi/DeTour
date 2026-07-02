@@ -7,9 +7,21 @@ import urllib.error
 import urllib.parse
 import json
 import math
+import os
 
 # Initialize the FastAPI application
 app = FastAPI(title="DeTour API")
+
+# Load local POIs database from pois.json
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+POIS_PATH = os.path.join(BASE_DIR, "pois.json")
+LOCAL_POIS = []
+try:
+    with open(POIS_PATH, "r", encoding="utf-8") as f:
+        LOCAL_POIS = json.load(f)
+    print(f"Successfully loaded {len(LOCAL_POIS)} local POIs from {POIS_PATH}.")
+except Exception as e:
+    print(f"Warning: Failed to load local POIs: {str(e)}")
 
 # Define allowed origins for CORS
 origins = [
@@ -196,226 +208,50 @@ def get_pois(poi_request: PoiRequest):
     north_fuel = max_lat + d_lat_fuel
     west_fuel = min_lng - d_lng_fuel
     east_fuel = max_lng + d_lng_fuel
-    bbox_str_fuel = f"{south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f}"
-
-    # Simplify coordinates for the Overpass around query to avoid excessively long query strings
-    # We target around 10 points for the corridor definition to ensure maximum performance and avoid timeouts
-    n_simplify = max(1, len(coords) // 10)
-    overpass_coords = simplify_geometry(coords, n=n_simplify)
-    
-    # Format coordinate pairs as "lat,lon" separated by commas (Overpass uses lat,lon order)
-    around_coords_str = ",".join(f"{c[1]:.6f},{c[0]:.6f}" for c in overpass_coords)
-    
-    # Convert buffer distance to meters for Overpass around query
-    radius_meters = int(poi_request.buffer_distance_km * 1000)
-
-    print(f"--- [get_pois] Corridor Query Configuration ---")
-    print(f"  Target buffer: {poi_request.buffer_distance_km} km ({radius_meters} meters)")
-    print(f"  Simplified corridor point count: {len(overpass_coords)}")
-    print(f"  Bounding Box: {bbox_str}")
-    print(f"--- [get_pois] Corridor Calculation Complete ---")
-
-    # Construct Overpass QL Query using both bbox and around filter to optimize server performance
-    query_parts = []
-    
-    # Only query historic, tourism, and natural if buffer >= 5.0 km (active detour selections)
-    if poi_request.buffer_distance_km >= 5.0:
-        query_parts.extend([
-            f"  node[\"historic\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
-            f"  way[\"historic\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
-            f"  node[\"site\"=\"archaeological\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
-            f"  way[\"site\"=\"archaeological\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
-            f"  node[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
-            f"  way[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
-            f"  node[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
-            f"  way[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});"
-        ])
-    
-    # Always query fuel stations along the main route (using 1000m radius around the route within tight bbox)
-    query_parts.extend([
-        f"  node[\"amenity\"=\"fuel\"]({bbox_str_fuel})(around:1000,{around_coords_str});",
-        f"  way[\"amenity\"=\"fuel\"]({bbox_str_fuel})(around:1000,{around_coords_str});"
-    ])
-    
-    query_body = "\n".join(query_parts)
-    overpass_query = (
-        f"[out:json][timeout:15];\n"
-        f"(\n"
-        f"{query_body}\n"
-        f");\n"
-        f"out center;"
-    )
-
-    OVERPASS_ENDPOINTS = [
-        "https://overpass-api.de/api/interpreter",
-        "https://lz4.overpass-api.de/api/interpreter",
-        "https://z.overpass-api.de/api/interpreter",
-        "https://overpass.kumi.systems/api/interpreter"
-    ]
-
-    print(f"--- [get_pois] Sending Query to Overpass API ---")
-    print(f"Overpass Query String:\n{overpass_query}\n")
 
     import time
     start_time = time.time()
-    last_http_code = None
-    last_error_msg = ""
+    pois = []
+    
+    # Filter POIs in memory
+    for poi in LOCAL_POIS:
+        lat = poi["lat"]
+        lng = poi["lng"]
+        poi_type = poi["type"]
+        
+        # Check boundary box depending on type
+        if poi_type == "fuel":
+            if not (south_fuel <= lat <= north_fuel and west_fuel <= lng <= east_fuel):
+                continue
+            max_allowed = 1.0
+        else:
+            # Skip non-fuel categories if buffer_distance_km < 5.0 (active detour selection)
+            if poi_request.buffer_distance_km < 5.0:
+                continue
+            if not (south <= lat <= north and west <= lng <= east):
+                continue
+            max_allowed = poi_request.buffer_distance_km
+            
+        # Precise corridor distance filter
+        dist_to_route = min_distance_to_route(lat, lng, simplified_dist_coords, cos_lat)
+        if dist_to_route <= max_allowed:
+            pois.append({
+                "name": poi["name"],
+                "lat": lat,
+                "lng": lng,
+                "type": poi_type,
+                "distance_to_route": round(dist_to_route, 3)
+            })
 
-    for endpoint in OVERPASS_ENDPOINTS:
-        try:
-            print(f"--- [get_pois] Trying Overpass Endpoint: {endpoint} ---")
-            data = urllib.parse.urlencode({"data": overpass_query}).encode("utf-8")
-            req = urllib.request.Request(
-                endpoint,
-                data=data,
-                headers={"User-Agent": "DeTour-App/1.0"}
-            )
-            with urllib.request.urlopen(req, timeout=12) as response:
-                end_time = time.time()
-                duration = end_time - start_time
-                print(f"Overpass Request Duration: {duration:.3f} seconds (using {endpoint})")
-                
-                if response.status != 200:
-                    raise urllib.error.HTTPError(
-                        req.full_url, response.status, "Non-200 response status", response.headers, None
-                    )
-                
-                result = json.loads(response.read().decode())
-                elements = result.get("elements", [])
-                print(f"Overpass returned {len(elements)} raw elements.")
-                
-                pois = []
-                for element in elements:
-                    tags = element.get("tags", {})
-                    
-                    # Determine lat/lng
-                    if element.get("type") == "node":
-                        lat = element.get("lat")
-                        lng = element.get("lon")
-                    else:
-                        center = element.get("center", {})
-                        lat = center.get("lat")
-                        lng = center.get("lon")
+    # Sort POIs by distance to route so closest ones are presented first
+    pois.sort(key=lambda p: p["distance_to_route"])
 
-                    if lat is None or lng is None:
-                        continue
+    end_time = time.time()
+    duration = end_time - start_time
+    print(f"Local POI Search Duration: {duration:.6f} seconds. Found {len(pois)} POIs.")
 
-                    # Determine type and default name
-                    poi_type = None
-                    default_name = "Point of Interest"
-
-                    if "historic" in tags or tags.get("site") == "archaeological":
-                        poi_type = "historic"
-                        subtype = tags.get("historic", "").replace('_', ' ').title()
-                        if tags.get("site") == "archaeological" or subtype == "Archaeological Site":
-                            subtype = "Archaeological Site"
-                        elif not subtype:
-                            subtype = "Historic Site"
-                        default_name = subtype
-                    elif "tourism" in tags:
-                        # Require a valid name tag for tourism POIs to prevent nameless pins
-                        if "name" not in tags:
-                            continue
-                        poi_type = "tourism"
-                        default_name = tags["tourism"].replace('_', ' ').title()
-                    elif "natural" in tags:
-                        # Require a valid name tag for natural POIs to prevent nameless pins
-                        if "name" not in tags:
-                            continue
-                        poi_type = "natural"
-                        default_name = tags["natural"].replace('_', ' ').title()
-                    elif tags.get("amenity") == "fuel":
-                        poi_type = "fuel"
-                        default_name = "Gas Station"
-
-                    if not poi_type:
-                        continue
-
-                    # Determine final name (resolved to default_name if nameless)
-                    name = tags.get("name", default_name)
-                    
-                    # Skip peak tags
-                    if tags.get("natural") == "peak":
-                        continue
-
-                    # Skip industrial/storage water reservoirs, wastewater basins, and canals
-                    if tags.get("natural") == "water" and tags.get("water") in ["reservoir", "basin", "wastewater", "canal", "ditch"]:
-                        continue
-
-                    # Road-trip garbage name filter (excludes generic houses/buildings and other useless POIs)
-                    name_lower = name.lower()
-                    blocked_terms = [
-                        "airbus", "su deposu", "water reservoir", "water tank", 
-                        "dalış noktası", "dalis noktasi", "dive site", "underwater", 
-                        "batık", "batigi", "wreck", "reef", "baz istasyonu", 
-                        "cell tower", "trafo", "transformer", "su kulesi", "water tower",
-                        "yangın söndürme", "yangin sondurme", "yangın havuzu", "yangin havuzu",
-                        "yangın göleti", "yangin goleti", "fire fighting pond", "fire fighting reservoir",
-                        "fire pond", "fire reservoir", "fire water",
-                        # Sulama havuzları / göletleri
-                        "sulama havuzu", "sulama havuzlari", "sulama goleti", "sulama göleti", "irrigation pond", "irrigation pool",
-                        # Taş ocakları, madenler, şantiyeler
-                        "taş ocağı", "tas ocagi", "quarry", "quarries", "maden", "mine", "mines", "şantiye", "santiye", "construction site",
-                        # Kuyular
-                        "kuyu", "well", "wells",
-                        # Sınır / Mil Taşları
-                        "boundary stone", "milestone", "sınır taşı", "sinir tasi", "kilometre taşı", "nirengi",
-                        # Mezarlıklar / Mezarlar (büyük tarihi anıt mezarlar ve türbeler hariç)
-                        "mezar", "mezarlık", "mezarligi", "mezarlığı", "grave", "cemetery", "cemeteries",
-                        # Saçma/Alakasız Dükkan ve Esnaflar
-                        "uncu", "bakkal", "manav", "kasap", "şarküteri", "sarkuteri", "terzi", "berber", "kuaför", "kuafor", 
-                        "tekel", "nalbur", "züccaciye", "zuccaciye", "tuhafiye", "tütüncü", "tutuncu", "fırın", "firin", "pastane", "eczane",
-                        # Ufak/Alakasız yapılar ve evler
-                        "building", "house", "konut", "bina", "apartman", "apartment", " ev", "ev "
-                    ]
-                    if name_lower == "ev" or name_lower == "house" or name_lower == "building" or any(term in name_lower for term in blocked_terms):
-                        # Tarihi Anıt Mezarlar, Türbeler, Müzeler, Tarihi Konaklar, Saraylar vb. için istisna
-                        if any(exc in name_lower for exc in [
-                            "anıt", "anit", "mausoleum", "türbe", "turbe", 
-                            "müze", "muze", "museum", "tarihi", "tarih",
-                            "atatürk", "ataturk", "saray", "palace", 
-                            "konak", "kasır", "kasri", "kalesi", "kale"
-                        ]):
-                            pass
-                        else:
-                            continue
-
-                    # Precise corridor distance filter
-                    max_allowed = 1.0 if poi_type == "fuel" else poi_request.buffer_distance_km
-                    dist_to_route = min_distance_to_route(lat, lng, simplified_dist_coords, cos_lat)
-                    if dist_to_route > max_allowed:
-                        continue
-
-                    pois.append({
-                        "name": name,
-                        "lat": lat,
-                        "lng": lng,
-                        "type": poi_type,
-                        "distance_to_route": round(dist_to_route, 3)
-                    })
-
-                return {
-                    "pois": pois,
-                    "poi_count": len(pois),
-                    "query_duration_seconds": round(duration, 3)
-                }
-
-        except urllib.error.HTTPError as e:
-            print(f"Endpoint {endpoint} failed with HTTP Error {e.code}: {e.reason}")
-            last_http_code = e.code
-            last_error_msg = f"HTTP Error {e.code}: {e.reason}"
-        except Exception as e:
-            print(f"Endpoint {endpoint} failed: {str(e)}")
-            last_error_msg = str(e)
-
-    # If we get here, all endpoints failed
-    print(f"All Overpass endpoints failed. Last error: {last_error_msg}")
-    if last_http_code == 429:
-        raise HTTPException(
-            status_code=429, 
-            detail="Overpass API is busy (Too Many Requests). Please wait a moment and try again."
-        )
-    raise HTTPException(
-        status_code=504, 
-        detail="POI search timed out, please try a smaller detour range"
-    )
+    return {
+        "pois": pois,
+        "poi_count": len(pois),
+        "query_duration_seconds": round(duration, 3)
+    }
