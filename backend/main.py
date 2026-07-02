@@ -255,3 +255,5 @@ def get_pois(poi_request: PoiRequest):
         "poi_count": len(pois),
         "query_duration_seconds": round(duration, 3)
     }
+
+# Force reload for updated pois.json database
