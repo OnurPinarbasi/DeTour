@@ -896,3 +896,70 @@
     border-color: rgba(139, 92, 246, 0.2);
   }
 }
+
+/* ==========================================
+   Beta Badges and Coverage Notices Styles
+   ========================================== */
+
+.sidebar-header {
+  margin-bottom: 5px;
+}
+
+.sidebar h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px !important;
+}
+
+.beta-badge {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  color: white;
+  -webkit-text-fill-color: white; /* Overrides gradient text fill of parent h2 */
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  display: inline-block;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+}
+
+.beta-badge-splash {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  color: white;
+  -webkit-text-fill-color: white; /* Overrides gradient text fill of parent title */
+  padding: 4px 10px;
+  border-radius: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 12px;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.45);
+}
+
+.coverage-notice {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 0.7rem;
+  color: #8b5cf6; /* Vibrant purple for perfect visibility on light background */
+  font-weight: 600;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.sidebar-subtitle {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.72rem;
+  color: rgba(15, 23, 42, 0.6); /* Highly readable charcoal gray */
+  font-weight: 700;
+  margin: 4px 0 6px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}

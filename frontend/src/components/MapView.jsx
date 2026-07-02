@@ -558,7 +558,11 @@ function MapView() {
     <div className={`map-wrapper ${isResetting ? 'map-resetting' : ''} ${!visibleCategories.historic ? 'hide-historic' : ''} ${!visibleCategories.tourism ? 'hide-tourism' : ''} ${!visibleCategories.natural ? 'hide-natural' : ''} ${!visibleCategories.fuel ? 'hide-fuel' : ''}`}>
       {/* Sidebar Panel */}
       <div className="sidebar">
-        <h2>DeTour - Route Planner</h2>
+        <div className="sidebar-header">
+          <h2>DeTour <span className="beta-badge">BETA</span></h2>
+          <p className="sidebar-subtitle">Premium Route Planner</p>
+          <p className="coverage-notice">Only active in Turkey</p>
+        </div>
 
         <div className="location-box">
           <div className="location-item">

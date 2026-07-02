@@ -84,7 +84,9 @@ function SplashScreen() {
         </div>
 
         {/* Brand Name */}
-        <h1 className="splash-title" id="splash-app-title">DeTour</h1>
+        <h1 className="splash-title" id="splash-app-title">
+          DeTour <span className="beta-badge-splash">BETA</span>
+        </h1>
         <p className="splash-subtitle">premium route planner</p>
       </div>
     </div>
