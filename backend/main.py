@@ -176,16 +176,17 @@ def get_pois(poi_request: PoiRequest):
         raise HTTPException(status_code=400, detail="Invalid route geometry format.")
 
     avg_lat = (min_lat + max_lat) / 2.0
-    
-    # Calculate degree offset based on buffer_distance_km (1 degree lat is approx 111 km)
-    d_lat = poi_request.buffer_distance_km / 111.0
     cos_lat = math.cos(math.radians(avg_lat))
+    
+    # Calculate degree offset based on buffer_distance_km for the bounding box boundary
+    d_lat = poi_request.buffer_distance_km / 111.0
     d_lng = poi_request.buffer_distance_km / (111.0 * cos_lat) if cos_lat > 0 else d_lat
 
     south = min_lat - d_lat
     north = max_lat + d_lat
     west = min_lng - d_lng
     east = max_lng + d_lng
+    bbox_str = f"{south:.6f},{west:.6f},{north:.6f},{east:.6f}"
 
     # Calculate tight degree offset for fuel stations (only main road, 1.0 km buffer)
     d_lat_fuel = 1.0 / 111.0
@@ -195,35 +196,45 @@ def get_pois(poi_request: PoiRequest):
     north_fuel = max_lat + d_lat_fuel
     west_fuel = min_lng - d_lng_fuel
     east_fuel = max_lng + d_lng_fuel
+    bbox_str_fuel = f"{south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f}"
 
-    print(f"Calculated Bounding Box (Expanded):")
-    print(f"  Min Lat (South): {south:.6f}, Max Lat (North): {north:.6f}")
-    print(f"  Min Lng (West): {west:.6f}, Max Lng (East): {east:.6f}")
-    print(f"Calculated Bounding Box (Fuel / Tight):")
-    print(f"  Min Lat (South): {south_fuel:.6f}, Max Lat (North): {north_fuel:.6f}")
-    print(f"  Min Lng (West): {west_fuel:.6f}, Max Lng (East): {east_fuel:.6f}")
-    print(f"--- [get_pois] Bounding Box Calculation Complete ---")
+    # Simplify coordinates for the Overpass around query to avoid excessively long query strings
+    # We target around 10 points for the corridor definition to ensure maximum performance and avoid timeouts
+    n_simplify = max(1, len(coords) // 10)
+    overpass_coords = simplify_geometry(coords, n=n_simplify)
+    
+    # Format coordinate pairs as "lat,lon" separated by commas (Overpass uses lat,lon order)
+    around_coords_str = ",".join(f"{c[1]:.6f},{c[0]:.6f}" for c in overpass_coords)
+    
+    # Convert buffer distance to meters for Overpass around query
+    radius_meters = int(poi_request.buffer_distance_km * 1000)
 
-    # Construct Overpass QL Query
+    print(f"--- [get_pois] Corridor Query Configuration ---")
+    print(f"  Target buffer: {poi_request.buffer_distance_km} km ({radius_meters} meters)")
+    print(f"  Simplified corridor point count: {len(overpass_coords)}")
+    print(f"  Bounding Box: {bbox_str}")
+    print(f"--- [get_pois] Corridor Calculation Complete ---")
+
+    # Construct Overpass QL Query using both bbox and around filter to optimize server performance
     query_parts = []
     
     # Only query historic, tourism, and natural if buffer >= 5.0 km (active detour selections)
     if poi_request.buffer_distance_km >= 5.0:
         query_parts.extend([
-            f"  node[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"historic\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  node[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"site\"=\"archaeological\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  node[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  node[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});",
-            f"  way[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({south:.6f},{west:.6f},{north:.6f},{east:.6f});"
+            f"  node[\"historic\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
+            f"  way[\"historic\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
+            f"  node[\"site\"=\"archaeological\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
+            f"  way[\"site\"=\"archaeological\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
+            f"  node[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
+            f"  way[\"tourism\"~\"^(attraction|viewpoint|museum|gallery|zoo|aquarium|theme_park|artwork)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
+            f"  node[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});",
+            f"  way[\"natural\"~\"^(cave_entrance|beach|spring|hot_spring|geyser|volcano|sinkhole|water|saddle|dune|cape)$\"]({bbox_str})(around:{radius_meters},{around_coords_str});"
         ])
     
-    # Always query fuel stations along the main route
+    # Always query fuel stations along the main route (using 1000m radius around the route within tight bbox)
     query_parts.extend([
-        f"  node[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});",
-        f"  way[\"amenity\"=\"fuel\"]({south_fuel:.6f},{west_fuel:.6f},{north_fuel:.6f},{east_fuel:.6f});"
+        f"  node[\"amenity\"=\"fuel\"]({bbox_str_fuel})(around:1000,{around_coords_str});",
+        f"  way[\"amenity\"=\"fuel\"]({bbox_str_fuel})(around:1000,{around_coords_str});"
     ])
     
     query_body = "\n".join(query_parts)
@@ -277,30 +288,6 @@ def get_pois(poi_request: PoiRequest):
                 for element in elements:
                     tags = element.get("tags", {})
                     
-                    # Skip nameless items to prevent map clutter
-                    name = tags.get("name", "")
-                    if ("natural" in tags or "tourism" in tags) and not name:
-                        continue
-                    
-                    # Skip peak tags
-                    if tags.get("natural") == "peak":
-                        continue
-
-                    # Skip industrial/storage water reservoirs, wastewater basins, and canals
-                    if tags.get("natural") == "water" and tags.get("water") in ["reservoir", "basin", "wastewater", "canal", "ditch"]:
-                        continue
-
-                    # Road-trip garbage name filter (excludes diving reefs, sunken planes, cell towers, water towers, transformers, etc.)
-                    name_lower = name.lower()
-                    blocked_terms = [
-                        "airbus", "su deposu", "water reservoir", "water tank", 
-                        "dalış noktası", "dalis noktasi", "dive site", "underwater", 
-                        "batık", "batigi", "wreck", "reef", "baz istasyonu", 
-                        "cell tower", "trafo", "transformer", "su kulesi", "water tower"
-                    ]
-                    if any(term in name_lower for term in blocked_terms):
-                        continue
-                    
                     # Determine lat/lng
                     if element.get("type") == "node":
                         lat = element.get("lat")
@@ -344,13 +331,60 @@ def get_pois(poi_request: PoiRequest):
                     if not poi_type:
                         continue
 
+                    # Determine final name (resolved to default_name if nameless)
+                    name = tags.get("name", default_name)
+                    
+                    # Skip peak tags
+                    if tags.get("natural") == "peak":
+                        continue
+
+                    # Skip industrial/storage water reservoirs, wastewater basins, and canals
+                    if tags.get("natural") == "water" and tags.get("water") in ["reservoir", "basin", "wastewater", "canal", "ditch"]:
+                        continue
+
+                    # Road-trip garbage name filter (excludes generic houses/buildings and other useless POIs)
+                    name_lower = name.lower()
+                    blocked_terms = [
+                        "airbus", "su deposu", "water reservoir", "water tank", 
+                        "dalış noktası", "dalis noktasi", "dive site", "underwater", 
+                        "batık", "batigi", "wreck", "reef", "baz istasyonu", 
+                        "cell tower", "trafo", "transformer", "su kulesi", "water tower",
+                        "yangın söndürme", "yangin sondurme", "yangın havuzu", "yangin havuzu",
+                        "yangın göleti", "yangin goleti", "fire fighting pond", "fire fighting reservoir",
+                        "fire pond", "fire reservoir", "fire water",
+                        # Sulama havuzları / göletleri
+                        "sulama havuzu", "sulama havuzlari", "sulama goleti", "sulama göleti", "irrigation pond", "irrigation pool",
+                        # Taş ocakları, madenler, şantiyeler
+                        "taş ocağı", "tas ocagi", "quarry", "quarries", "maden", "mine", "mines", "şantiye", "santiye", "construction site",
+                        # Kuyular
+                        "kuyu", "well", "wells",
+                        # Sınır / Mil Taşları
+                        "boundary stone", "milestone", "sınır taşı", "sinir tasi", "kilometre taşı", "nirengi",
+                        # Mezarlıklar / Mezarlar (büyük tarihi anıt mezarlar ve türbeler hariç)
+                        "mezar", "mezarlık", "mezarligi", "mezarlığı", "grave", "cemetery", "cemeteries",
+                        # Saçma/Alakasız Dükkan ve Esnaflar
+                        "uncu", "bakkal", "manav", "kasap", "şarküteri", "sarkuteri", "terzi", "berber", "kuaför", "kuafor", 
+                        "tekel", "nalbur", "züccaciye", "zuccaciye", "tuhafiye", "tütüncü", "tutuncu", "fırın", "firin", "pastane", "eczane",
+                        # Ufak/Alakasız yapılar ve evler
+                        "building", "house", "konut", "bina", "apartman", "apartment", " ev", "ev "
+                    ]
+                    if name_lower == "ev" or name_lower == "house" or name_lower == "building" or any(term in name_lower for term in blocked_terms):
+                        # Tarihi Anıt Mezarlar, Türbeler, Müzeler, Tarihi Konaklar, Saraylar vb. için istisna
+                        if any(exc in name_lower for exc in [
+                            "anıt", "anit", "mausoleum", "türbe", "turbe", 
+                            "müze", "muze", "museum", "tarihi", "tarih",
+                            "atatürk", "ataturk", "saray", "palace", 
+                            "konak", "kasır", "kasri", "kalesi", "kale"
+                        ]):
+                            pass
+                        else:
+                            continue
+
                     # Precise corridor distance filter
                     max_allowed = 1.0 if poi_type == "fuel" else poi_request.buffer_distance_km
                     dist_to_route = min_distance_to_route(lat, lng, simplified_dist_coords, cos_lat)
                     if dist_to_route > max_allowed:
                         continue
-
-                    name = tags.get("name", default_name)
 
                     pois.append({
                         "name": name,
