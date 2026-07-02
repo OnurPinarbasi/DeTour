@@ -12,9 +12,9 @@ import os
 # Initialize the FastAPI application
 app = FastAPI(title="DeTour API")
 
-# Load local POIs database from pois.json
+# Load local POIs database from poi_turkey.json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-POIS_PATH = os.path.join(BASE_DIR, "pois.json")
+POIS_PATH = os.path.join(BASE_DIR, "poi_turkey.json")
 LOCAL_POIS = []
 try:
     with open(POIS_PATH, "r", encoding="utf-8") as f:

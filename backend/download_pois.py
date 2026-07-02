@@ -197,12 +197,12 @@ out center;"""
                 print(f"  ERROR: Step {current_step} failed to download after fallback: {str(e)}")
                 print("  Skipping this step region...")
 
-    # Write dictionary values to pois.json
+    # Write dictionary values to poi_turkey.json
     output_pois = list(pois_db.values())
-    with open("pois.json", "w", encoding="utf-8") as f:
+    with open("poi_turkey.json", "w", encoding="utf-8") as f:
         json.dump(output_pois, f, ensure_ascii=False, indent=2)
         
-    print(f"\nSUCCESS: Download complete! Saved {len(output_pois)} POIs to pois.json")
+    print(f"\nSUCCESS: Download complete! Saved {len(output_pois)} POIs to poi_turkey.json")
 
 if __name__ == "__main__":
     generate_pois()
