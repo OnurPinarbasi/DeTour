@@ -561,7 +561,7 @@ function MapView() {
         <div className="sidebar-header">
           <h2>DeTour <span className="beta-badge">BETA</span></h2>
           <p className="sidebar-subtitle">Premium Route Planner</p>
-          <p className="coverage-notice">Only active in Turkey</p>
+          <p className="coverage-notice">Currently only active in Türkiye </p>
         </div>
 
         <div className="location-box">
@@ -779,10 +779,10 @@ function MapView() {
         })}
 
         {/* Render other POIs clustered using our custom POICluster component */}
-        <POICluster 
-          activePOIs={filteredPOIs.filter(poi => poi.type !== 'fuel')} 
-          poiIcons={poiIcons} 
-          visibleCategories={visibleCategories} 
+        <POICluster
+          activePOIs={filteredPOIs.filter(poi => poi.type !== 'fuel')}
+          poiIcons={poiIcons}
+          visibleCategories={visibleCategories}
         />
       </MapContainer>
     </div>
